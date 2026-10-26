@@ -10,6 +10,16 @@ it happens, and **PURGE → VANILLA** verifiably returns the game folder to its 
 > The UI sounds come from Cyberpunk 2077 (© CD PROJEKT S.A.), see [NOTICE.md](NOTICE.md).
 > Working title.
 
+![RIPPERDOC: inventory with load order, conflicts and toggles](docs/media/inventory.gif)
+
+| Install a mod | Boot sequence |
+|---|---|
+| ![Install dialog](docs/media/install.gif) | ![Boot sequence](docs/media/boot.gif) |
+| **Tabs (Q / E)** | **Color schemes** |
+| ![Switching tabs](docs/media/tabs.gif) | ![Color schemes](docs/media/themes.gif) |
+
+*Recorded with demo data: real framework names, made-up content mods.*
+
 ## Status
 
 | Step | Contents | Status |

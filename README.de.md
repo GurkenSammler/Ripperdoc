@@ -10,6 +10,16 @@ sondern aus einem eigenen Staging-Ordner per **Hardlink** eingespielt. Jede Änd
 > kommerziell. Die UI-Sounds stammen aus Cyberpunk 2077 (© CD PROJEKT S.A.), siehe [NOTICE.md](NOTICE.md).
 > Arbeitstitel.
 
+![RIPPERDOC: Inventar mit Reihenfolge, Konflikten und Schaltern](docs/media/inventory.gif)
+
+| Mod installieren | Boot-Sequenz |
+|---|---|
+| ![Installations-Dialog](docs/media/install.gif) | ![Boot-Sequenz](docs/media/boot.gif) |
+| **Tabs (Q / E)** | **Farbschemata** |
+| ![Tabs wechseln](docs/media/tabs.gif) | ![Farbschemata](docs/media/themes.gif) |
+
+*Aufgenommen mit Demo-Daten: echte Framework-Namen, ausgedachte Mods. Oberfläche hier auf Englisch.*
+
 ## Stand
 
 | Schritt | Inhalt | Status |
