@@ -1,0 +1,16 @@
+# Privat - nie ins Repo
+sounds/custom/
+*.nexus-key
+.env
+
+# Build
+node_modules/
+out/
+dist/
+release/
+*.log
+
+# System
+.DS_Store
+Thumbs.db
+desktop.ini

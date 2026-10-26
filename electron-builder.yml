@@ -1,0 +1,47 @@
+# Pakete für Windows: Installer (Setup.exe, ohne Admin-Rechte) und portable Version (Zip).
+# Bauen: npm run dist  →  release/<version>/
+appId: io.github.gurkensammler.ripperdoc
+productName: RIPPERDOC
+copyright: Copyright (c) 2026 GurkenSammler
+directories:
+  output: release/${version}
+  buildResources: build
+# Fertiges Electron aus node_modules statt erneut herunterladen
+electronDist: node_modules/electron/dist
+afterPack: scripts/after-pack.cjs
+files:
+  - out/**
+  - package.json
+  - "!**/*.map"
+extraResources:
+  # Errechnete Ersatz-Töne + Original-UI-Sounds aus Cyberpunk 2077 (siehe NOTICE.md).
+  # sounds/custom bleibt privat und kommt nie in ein Paket.
+  - from: sounds/default
+    to: sounds/default
+  - from: sounds/game
+    to: sounds/game
+  - from: build/icon.ico
+    to: build/icon.ico
+  - from: LICENSE
+    to: LICENSE.txt
+  - from: NOTICE.md
+    to: NOTICE.md
+win:
+  # gilt für die Zip-Version; der Installer hat unten seinen eigenen Namen
+  artifactName: ${productName}-${version}-portable.${ext}
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: x64
+    - target: zip
+      arch: x64
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: RIPPERDOC
+  deleteAppDataOnUninstall: false
+  installerLanguages: [en_US, de_DE]
+  include: build/installer.nsh
+  artifactName: ${productName}-Setup-${version}.${ext}
