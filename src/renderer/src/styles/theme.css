@@ -1,0 +1,143 @@
+/* Farbschemata wie in NC-OS: Rollen statt Farben, damit jedes Schema überall passt.
+   primary = Text/Linien (RED: lachsrot), accent = Auswahl/Fokus (RED: cyan). */
+@font-face {
+  font-family: 'Rajdhani';
+  src: url('../assets/fonts/rajdhani_regular.ttf') format('truetype');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Rajdhani';
+  src: url('../assets/fonts/rajdhani_medium.ttf') format('truetype');
+  font-weight: 500;
+}
+@font-face {
+  font-family: 'Rajdhani';
+  src: url('../assets/fonts/rajdhani_semibold.ttf') format('truetype');
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'Rajdhani';
+  src: url('../assets/fonts/rajdhani_bold.ttf') format('truetype');
+  font-weight: 700;
+}
+
+:root,
+[data-theme='RED'] {
+  --primary: #e8604f;
+  --primary-dim: #7a2a28;
+  --deep: #2a0e10;
+  --alert: #f83840;
+  --accent: #5ef0ff;
+  --accent-dim: #1f5a63;
+  --special: #f8b030;
+  --bg: #05080d;
+  --panel: #0b1017;
+}
+[data-theme='AMBER'] {
+  --primary: #fcee0a;
+  --primary-dim: #6e6810;
+  --deep: #24220a;
+  --alert: #ff3b3b;
+  --accent: #02d7f2;
+  --accent-dim: #0e5560;
+  --special: #ff9f1c;
+  --bg: #07070a;
+  --panel: #101012;
+}
+[data-theme='ACID'] {
+  --primary: #3dff9a;
+  --primary-dim: #1c6b45;
+  --deep: #0a2416;
+  --alert: #ff2e63;
+  --accent: #ff4fd8;
+  --accent-dim: #6b1f5c;
+  --special: #e8ff5a;
+  --bg: #04090a;
+  --panel: #08110f;
+}
+[data-theme='VIOLET'] {
+  --primary: #c77dff;
+  --primary-dim: #55307a;
+  --deep: #1d0f2a;
+  --alert: #ff3d6e;
+  --accent: #5ef0ff;
+  --accent-dim: #1f5a63;
+  --special: #ffc857;
+  --bg: #07050d;
+  --panel: #100b18;
+}
+[data-theme='ICE'] {
+  --primary: #5ef0ff;
+  --primary-dim: #1f5a63;
+  --deep: #0a2226;
+  --alert: #f83840;
+  --accent: #e8604f;
+  --accent-dim: #7a2a28;
+  --special: #f8b030;
+  --bg: #04080c;
+  --panel: #0a1016;
+}
+
+:root {
+  --green: #2be38a;
+  --ink: var(--bg);
+  --line: color-mix(in srgb, var(--primary) 45%, transparent);
+  --line-soft: color-mix(in srgb, var(--primary) 18%, transparent);
+  --fill-soft: color-mix(in srgb, var(--primary) 7%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --font: 'Rajdhani', 'Segoe UI', sans-serif;
+  --mono: 'Cascadia Mono', 'Consolas', monospace;
+  --titlebar: 34px;
+  --scanlines: 0.5;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--primary);
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--primary-dim);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}

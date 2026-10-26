@@ -1,0 +1,158 @@
+import { area } from './area'
+
+// NET (Nexus). Schlüssel: net.*
+export const net = area({
+  de: {
+    // Knöpfe, die mehrere Abschnitte brauchen
+    'net.btn.connect': 'Verbinden',
+    'net.btn.checking': 'Prüfe…',
+
+    // Uplink (Nexus-Konto)
+    'net.uplink.signedIn': (name: string) => `Angemeldet als ${name}.`,
+    'net.uplink.status.disrupted': 'GESTÖRT',
+    'net.uplink.status.connecting': 'VERBINDE…',
+    'net.uplink.status.unverified': 'NICHT GEPRÜFT',
+    'net.uplink.keyEncrypted': 'KEY VERSCHLÜSSELT',
+    'net.uplink.lastKnown': 'LETZTER STAND',
+    'net.uplink.lastKnownHint': 'Zuletzt bekannter Stand; Nexus hat das Konto in dieser Sitzung noch nicht bestätigt.',
+    'net.uplink.checkingChip': 'PRÜFE…',
+    'net.uplink.rate': (hourly: number, daily: number) => `API-LIMIT ${hourly} / STUNDE · ${daily} / TAG ÜBRIG`,
+    'net.uplink.premium': 'Premium: RIPPERDOC lädt direkt, auch Updates mit einem Klick.',
+    'net.uplink.free': 'Ohne Premium lädt RIPPERDOC über den Knopf „Mod Manager Download“ auf der Website.',
+    'net.uplink.connecting': 'Verbinde mit Nexus…',
+    'net.uplink.notVerified': 'Konto noch nicht geprüft.',
+    'net.uplink.noAccount': 'Noch kein Nexus-Konto verbunden.',
+    'net.uplink.keyHelp':
+      'Persönlichen API-Key auf nexusmods.com unter Einstellungen › API Keys kopieren und hier einfügen. Er wird mit Windows verschlüsselt gespeichert und nur an api.nexusmods.com geschickt.',
+    'net.uplink.newKey': 'Neuer Key',
+    'net.uplink.personalKey': 'Persönlicher API-Key',
+    'net.uplink.deleteKey': 'Key löschen',
+    'net.uplink.noEncryption': 'Windows-Verschlüsselung nicht verfügbar, der Key kann nicht gespeichert werden.',
+
+    // Nexus-Störung
+    'net.outage.chip': 'NEXUS GESTÖRT',
+    'net.outage.since': (time: string) => `SEIT ${time}`,
+    'net.outage.nextTry': (wait: string) => `NÄCHSTER VERSUCH IN ${wait}`,
+    'net.outage.explain':
+      'Installierte Mods, Purge und Launch laufen normal weiter. Downloads und der Update-Check holen nach, sobald Nexus wieder antwortet; fehlgeschlagene Downloads bleiben in der Liste und lassen sich mit „Nochmal“ neu starten.',
+    'net.outage.tryNow': 'Jetzt versuchen',
+    'net.outage.statusPage': 'Nexus-Statusseite',
+
+    // Statusseite von Nexus
+    'net.health.affects': (services: string) => `betrifft ${services}`,
+    'net.health.affectsAlone': (services: string) => `Betrifft ${services}`,
+
+    // nxm-Verknüpfung (Knopf „Mod Manager Download“)
+    'net.nxm.status.connected': 'VERBUNDEN',
+    'net.nxm.status.taken': 'BELEGT',
+    'net.nxm.status.off': 'AUS',
+    'net.nxm.ours.pre': 'Ein Klick auf ',
+    'net.nxm.ours.button': '„Mod Manager Download“',
+    'net.nxm.ours.post': ' auf nexusmods.com schickt die Datei direkt an RIPPERDOC: laden, prüfen, Dialog zum Installieren.',
+    'net.nxm.other.pre': 'nxm-Links öffnet gerade ',
+    'net.nxm.other.post': '. Übernehmen, damit der Knopf auf der Website RIPPERDOC startet.',
+    'net.nxm.none': 'nxm-Links sind mit keinem Programm verbunden.',
+    'net.nxm.disconnect': 'Trennen',
+    'net.nxm.takeOver': 'Übernehmen',
+    'net.nxm.openNexus': 'Nexus öffnen',
+
+    // Downloads
+    'net.dl.state.queued': 'WARTET',
+    'net.dl.state.preparing': 'VERBINDE',
+    'net.dl.state.downloading': 'LÄDT',
+    'net.dl.state.done': 'FERTIG',
+    'net.dl.state.canceled': 'ABGEBROCHEN',
+    'net.dl.active': (n: number) => `${n} AKTIV`,
+    'net.dl.empty': 'Noch nichts geladen. Fertige Downloads öffnen automatisch den Installations-Dialog.',
+    'net.dl.resumeHint': 'Lädt an der Abbruchstelle weiter',
+    'net.dl.retry': 'Nochmal',
+    'net.dl.fetching': 'HOLE DATEN VON NEXUS…',
+    'net.dl.resumed': 'FORTGESETZT',
+    'net.dl.hideFinished': 'Fertige ausblenden',
+
+    // Updates
+    'net.up.toastTitle': 'UPDATE-CHECK',
+    'net.up.toastFound': (n: number) => (n === 1 ? '1 Update verfügbar.' : `${n} Updates verfügbar.`),
+    'net.up.toastNone': 'Alles aktuell.',
+    'net.up.checked': (time: string) => `GEPRÜFT ${time}`,
+    'net.up.neverChecked': 'NOCH NIE GEPRÜFT',
+    'net.up.empty': 'Noch keine Mods mit Nexus-ID. Über Nexus geladene Mods (oder Archive mit Nexus-Dateinamen) werden hier geprüft.',
+    'net.up.current': 'AKTUELL',
+    'net.up.download': 'Laden',
+    'net.up.checkNow': 'Jetzt prüfen',
+    'net.up.pending': (n: number) => (n === 1 ? '1 UPDATE VERFÜGBAR' : `${n} UPDATES VERFÜGBAR`),
+  },
+  en: {
+    'net.btn.connect': 'Connect',
+    'net.btn.checking': 'Checking…',
+
+    'net.uplink.signedIn': (name: string) => `Signed in as ${name}.`,
+    'net.uplink.status.disrupted': 'OUTAGE',
+    'net.uplink.status.connecting': 'CONNECTING…',
+    'net.uplink.status.unverified': 'NOT VERIFIED',
+    'net.uplink.keyEncrypted': 'API KEY ENCRYPTED',
+    'net.uplink.lastKnown': 'LAST KNOWN',
+    'net.uplink.lastKnownHint': 'Last known state; Nexus has not confirmed the account this session yet.',
+    'net.uplink.checkingChip': 'CHECKING…',
+    'net.uplink.rate': (hourly: number, daily: number) => `API LIMIT ${hourly} / HOUR · ${daily} / DAY LEFT`,
+    'net.uplink.premium': 'Premium: RIPPERDOC downloads directly, including one-click updates.',
+    'net.uplink.free': 'Without Premium, RIPPERDOC downloads via the “Mod Manager Download” button on the website.',
+    'net.uplink.connecting': 'Connecting to Nexus…',
+    'net.uplink.notVerified': 'Account not verified yet.',
+    'net.uplink.noAccount': 'No Nexus account connected yet.',
+    'net.uplink.keyHelp':
+      'Copy your personal API key from nexusmods.com under Settings › API Keys and paste it here. It is stored encrypted by Windows and only sent to api.nexusmods.com.',
+    'net.uplink.newKey': 'New API key',
+    'net.uplink.personalKey': 'Personal API key',
+    'net.uplink.deleteKey': 'Delete API key',
+    'net.uplink.noEncryption': 'Windows encryption unavailable, the API key cannot be saved.',
+
+    'net.outage.chip': 'NEXUS OUTAGE',
+    'net.outage.since': (time: string) => `SINCE ${time}`,
+    'net.outage.nextTry': (wait: string) => `NEXT TRY IN ${wait}`,
+    'net.outage.explain':
+      'Installed mods, purge and launch keep working as usual. Downloads and the update check catch up as soon as Nexus responds again; failed downloads stay in the list and can be restarted with “Retry”.',
+    'net.outage.tryNow': 'Try now',
+    'net.outage.statusPage': 'Nexus status page',
+
+    'net.health.affects': (services: string) => `affects ${services}`,
+    'net.health.affectsAlone': (services: string) => `Affects ${services}`,
+
+    'net.nxm.status.connected': 'CONNECTED',
+    'net.nxm.status.taken': 'TAKEN',
+    'net.nxm.status.off': 'OFF',
+    'net.nxm.ours.pre': 'Clicking ',
+    'net.nxm.ours.button': '“Mod Manager Download”',
+    'net.nxm.ours.post': ' on nexusmods.com sends the file straight to RIPPERDOC: download, check, install dialog.',
+    'net.nxm.other.pre': 'nxm links currently open in ',
+    'net.nxm.other.post': '. Take over so the button on the website launches RIPPERDOC.',
+    'net.nxm.none': 'nxm links are not connected to any program.',
+    'net.nxm.disconnect': 'Disconnect',
+    'net.nxm.takeOver': 'Take over',
+    'net.nxm.openNexus': 'Open Nexus',
+
+    'net.dl.state.queued': 'QUEUED',
+    'net.dl.state.preparing': 'CONNECTING',
+    'net.dl.state.downloading': 'DOWNLOADING',
+    'net.dl.state.done': 'DONE',
+    'net.dl.state.canceled': 'CANCELED',
+    'net.dl.active': (n: number) => `${n} ACTIVE`,
+    'net.dl.empty': 'Nothing downloaded yet. Finished downloads open the install dialog automatically.',
+    'net.dl.resumeHint': 'Resumes where it stopped',
+    'net.dl.retry': 'Retry',
+    'net.dl.fetching': 'FETCHING DATA FROM NEXUS…',
+    'net.dl.resumed': 'RESUMED',
+    'net.dl.hideFinished': 'Hide finished',
+
+    'net.up.toastTitle': 'UPDATE CHECK',
+    'net.up.toastFound': (n: number) => (n === 1 ? '1 update available.' : `${n} updates available.`),
+    'net.up.toastNone': 'All up to date.',
+    'net.up.checked': (time: string) => `CHECKED ${time}`,
+    'net.up.neverChecked': 'NEVER CHECKED',
+    'net.up.empty': 'No mods with a Nexus ID yet. Mods downloaded from Nexus (or archives with Nexus file names) are checked here.',
+    'net.up.current': 'UP TO DATE',
+    'net.up.download': 'Download',
+    'net.up.checkNow': 'Check now',
+    'net.up.pending': (n: number) => (n === 1 ? '1 UPDATE AVAILABLE' : `${n} UPDATES AVAILABLE`),
+  },
+})
