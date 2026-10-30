@@ -1,14 +1,15 @@
 import { createContext, useContext } from 'react'
-import type { AppInfo, DownloadItem, GameInfo, GameRunState, InventoryView, NexusStatus, Settings } from '@shared/types'
+import type { AppInfo, DownloadItem, GameInfo, GameRunState, InventoryView, ModPlan, NexusStatus, Settings } from '@shared/types'
 import { getLang } from '@shared/i18n'
 
-export type ScreenId = 'inventory' | 'cyberware' | 'loadorder' | 'net' | 'journal' | 'config'
+export type ScreenId = 'inventory' | 'cyberware' | 'loadorder' | 'net' | 'shards' | 'journal' | 'config'
 
 export const SCREENS: { id: ScreenId; label: string }[] = [
   { id: 'inventory', label: 'Inventory' },
   { id: 'cyberware', label: 'Cyberware' },
   { id: 'loadorder', label: 'Load Order' },
   { id: 'net', label: 'Net' },
+  { id: 'shards', label: 'Shards' },
   { id: 'journal', label: 'Journal' },
   { id: 'config', label: 'Sys.Config' },
 ]
@@ -39,6 +40,9 @@ export interface Ctx {
   act: <T>(fn: () => Promise<T>) => Promise<T | undefined>
   startImport: (paths: string[]) => Promise<void>
   go: (s: ScreenId) => void
+  /** Geladene Collection / geöffneter Shard (SHARDS); null = keiner. */
+  plan: ModPlan | null
+  setPlan: (p: ModPlan | null) => void
   replayBoot: () => void
 }
 

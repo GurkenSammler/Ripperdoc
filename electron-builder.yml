@@ -26,6 +26,13 @@ extraResources:
     to: LICENSE.txt
   - from: NOTICE.md
     to: NOTICE.md
+# Doppelklick auf eine geteilte Mod-Liste öffnet sie in RIPPERDOC (SHARDS); nur über den Installer registriert
+fileAssociations:
+  - ext: rdshard
+    name: RIPPERDOC Shard
+    description: RIPPERDOC mod list (shard)
+    role: Viewer
+    icon: build/icon.ico
 win:
   # gilt für die Zip-Version; der Installer hat unten seinen eigenen Namen
   artifactName: ${productName}-${version}-portable.${ext}

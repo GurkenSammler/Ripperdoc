@@ -7,6 +7,7 @@ export interface FrameworkDef {
   // Eine dieser Dateien (relativ zur Spielwurzel, klein geschrieben) zeigt: das Framework ist da.
   markers: string[]
   github?: string // owner/repo der offiziellen Releases (Schritt 2)
+  nexusId?: number // Mod-ID auf Nexus: Requirements anderer Mods zeigen darauf
   needs: FrameworkId[] // worauf das Framework selbst aufbaut
 }
 
@@ -17,6 +18,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     short: 'CET',
     markers: ['bin/x64/plugins/cyber_engine_tweaks.asi'],
     github: 'maximegmd/CyberEngineTweaks',
+    nexusId: 107,
     needs: [],
   },
   {
@@ -25,6 +27,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     short: 'RED4EXT',
     markers: ['red4ext/red4ext.dll'],
     github: 'wopss/RED4ext',
+    nexusId: 2380,
     needs: [],
   },
   {
@@ -33,6 +36,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     short: 'REDSCRIPT',
     markers: ['engine/tools/scc.exe', 'engine/tools/scc_lib.dll'],
     github: 'jac3km4/redscript',
+    nexusId: 1511,
     needs: [],
   },
   {
@@ -41,6 +45,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     short: 'ARCHIVEXL',
     markers: ['red4ext/plugins/archivexl/archivexl.dll'],
     github: 'psiberx/cp2077-archive-xl',
+    nexusId: 4198,
     needs: ['red4ext'],
   },
   {
@@ -49,6 +54,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     short: 'TWEAKXL',
     markers: ['red4ext/plugins/tweakxl/tweakxl.dll'],
     github: 'psiberx/cp2077-tweak-xl',
+    nexusId: 4197,
     needs: ['red4ext'],
   },
   {
@@ -57,6 +63,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     short: 'CODEWARE',
     markers: ['red4ext/plugins/codeware/codeware.dll'],
     github: 'psiberx/cp2077-codeware',
+    nexusId: 7780,
     needs: ['red4ext', 'redscript'],
   },
   {
@@ -65,6 +72,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     short: 'INPUT LDR',
     markers: ['red4ext/plugins/input_loader/input_loader.dll'],
     github: 'jackhumbert/cyberpunk2077-input-loader',
+    nexusId: 4575,
     needs: ['red4ext'],
   },
   {
@@ -73,6 +81,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     short: 'MOD SET',
     markers: ['red4ext/plugins/mod_settings/mod_settings.dll'],
     github: 'jackhumbert/mod_settings',
+    nexusId: 4885,
     needs: ['red4ext', 'redscript'],
   },
   {
@@ -80,6 +89,7 @@ export const FRAMEWORKS: FrameworkDef[] = [
     name: 'Native Settings UI',
     short: 'NATIVE UI',
     markers: ['bin/x64/plugins/cyber_engine_tweaks/mods/nativesettings/init.lua'],
+    nexusId: 3518,
     needs: ['cet'],
   },
   {

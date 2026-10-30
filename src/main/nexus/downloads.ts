@@ -3,7 +3,7 @@ import { once } from 'node:events'
 import { createWriteStream, promises as fs, type WriteStream } from 'node:fs'
 import path from 'node:path'
 import { t } from '@shared/i18n'
-import type { DownloadItem, NexusMeta } from '@shared/types'
+import type { DownloadItem, ModOrigin, NexusMeta } from '@shared/types'
 import { netReason, sleep } from './client'
 
 // Download-Warteschlange: eine Datei nach der anderen (Nexus-CDN ist schnell genug), Fortschritt gedrosselt
@@ -26,6 +26,8 @@ export interface DownloadJob {
   modId: number
   fileId: number
   linkExpires?: number
+  auto?: boolean
+  origin?: ModOrigin
   prepare: () => Promise<PreparedDownload>
   resolveUrls: () => Promise<string[]>
 }
@@ -96,6 +98,8 @@ export class DownloadQueue {
       speed: 0,
       state: 'queued',
       linkExpires: job.linkExpires,
+      auto: job.auto,
+      origin: job.origin,
     }
     this.items.unshift(item)
     this.jobs.set(item.id, { job, item, abort: new AbortController(), prepared: null })

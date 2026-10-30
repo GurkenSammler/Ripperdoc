@@ -19,7 +19,7 @@ export const shell = area({
     'shell.banner.updated': (from: string, to: string) =>
       `Build ${from} → ${to}. Frameworks wie RED4ext oder ArchiveXL können jetzt kaputt sein.`,
     'shell.banner.checkCyberware': 'Cyberware prüfen',
-    'shell.drop.formats': 'ZIP · 7Z · RAR · .ARCHIVE · ORDNER',
+    'shell.drop.formats': 'ZIP · 7Z · RAR · .ARCHIVE · ORDNER · .RDSHARD',
 
     // JOURNAL
     'shell.journal.title': 'Journal // Änderungen am Spielordner',
@@ -66,7 +66,7 @@ export const shell = area({
     'shell.banner.updated': (from: string, to: string) =>
       `Build ${from} → ${to}. Frameworks like RED4ext or ArchiveXL may be broken now.`,
     'shell.banner.checkCyberware': 'Check Cyberware',
-    'shell.drop.formats': 'ZIP · 7Z · RAR · .ARCHIVE · FOLDER',
+    'shell.drop.formats': 'ZIP · 7Z · RAR · .ARCHIVE · FOLDER · .RDSHARD',
 
     // JOURNAL
     'shell.journal.title': 'Journal // Game folder changes',

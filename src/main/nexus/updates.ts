@@ -1,5 +1,7 @@
 // Versionsvergleich und Update-Erkennung aus der Dateiliste eines Nexus-Mods.
 
+import { normTitle } from '../mods/identity'
+
 export interface NexusFile {
   file_id: number
   name: string
@@ -9,6 +11,7 @@ export interface NexusFile {
   size_in_bytes?: number | null
   size_kb?: number
   uploaded_timestamp: number
+  is_primary?: boolean
 }
 
 export interface NexusFileUpdate {
@@ -68,11 +71,24 @@ export interface UpdateResult {
   latestFileName: string | null
 }
 
+const byNewest = (a: NexusFile, b: NexusFile) => b.uploaded_timestamp - a.uploaded_timestamp
+const norm = normTitle
+
+export interface InstalledFile {
+  version: string
+  fileId?: number
+  title?: string | null // Titel der Nexus-Datei, falls bekannt
+  category?: string // Kategorie beim Installieren (MAIN, OPTIONAL, …)
+}
+
 /**
  * Gibt es eine neuere Datei? Mit bekannter Datei-ID folgt das der Update-Kette von Nexus
- * (old_file_id → new_file_id). Ohne Datei-ID oder ohne Kette zählt die Mod-Version.
+ * (old_file_id → new_file_id). Ist die Datei selbst noch aktuell (MAIN, OPTIONAL, …), gibt es kein Update,
+ * auch wenn die Mod-Version gestiegen ist: Das betrifft dann eine andere Datei (Multi-File-Mods wie Garage,
+ * deren Teile alle unter einer Mod-ID liegen). Erst wenn sie veraltet ist, zählt ein Nachfolger mit
+ * gleichem Titel. Ohne Datei-ID zählt die Mod-Version.
  */
-export function computeUpdate(installed: { version: string; fileId?: number }, modVersion: string, files: NexusFiles): UpdateResult {
+export function computeUpdate(installed: InstalledFile, modVersion: string, files: NexusFiles): UpdateResult {
   if (installed.fileId !== undefined) {
     const next = new Map(files.file_updates.map((u) => [u.old_file_id, u.new_file_id]))
     let cur = installed.fileId
@@ -85,6 +101,19 @@ export function computeUpdate(installed: { version: string; fileId?: number }, m
     if (cur !== installed.fileId && target) {
       return { hasUpdate: true, latest: target.version || modVersion, latestFileId: cur, latestFileName: target.file_name }
     }
+    const own = files.files.find((f) => f.file_id === installed.fileId)
+    if (own && LIVE.has(own.category_name ?? '')) {
+      return { hasUpdate: false, latest: own.version || installed.version || null, latestFileId: null, latestFileName: null }
+    }
+    // Veraltet, archiviert oder ganz weg, ohne Kette: Nachfolger gleichen Titels, sonst die einzige Hauptdatei
+    const live = files.files.filter((f) => LIVE.has(f.category_name ?? '')).sort(byNewest)
+    const title = own?.name ?? installed.title ?? null
+    const same = title ? live.find((f) => norm(f.name) === norm(title)) : undefined
+    const mains = live.filter((f) => f.category_name === 'MAIN')
+    const wasMain = !installed.category || installed.category === 'MAIN' || installed.category === 'OLD_VERSION'
+    const succ = same ?? (wasMain && mains.length === 1 ? mains[0] : undefined)
+    if (succ) return { hasUpdate: true, latest: succ.version || modVersion, latestFileId: succ.file_id, latestFileName: succ.file_name }
+    return { hasUpdate: true, latest: modVersion || null, latestFileId: null, latestFileName: null }
   }
 
   const cmp = compareVersions(modVersion, installed.version)
@@ -96,6 +125,19 @@ export function computeUpdate(installed: { version: string; fileId?: number }, m
     return { hasUpdate: true, latest: modVersion, latestFileId: best.file_id, latestFileName: best.file_name }
   }
   return { hasUpdate: false, latest: modVersion || null, latestFileId: null, latestFileName: null }
+}
+
+/**
+ * Hauptdatei eines Mods (für Requirements und Shards ohne Datei-ID): die als primär markierte, sonst die
+ * einzige MAIN-Datei, sonst die neueste MAIN, wenn alle MAIN-Dateien denselben Titel haben (alte Versionen).
+ * null = mehrdeutig (mehrere verschiedene Hauptdateien) oder keine; dann muss man auf Nexus wählen.
+ */
+export function pickMainFile(files: NexusFiles): NexusFile | null {
+  const mains = files.files.filter((f) => f.category_name === 'MAIN').sort(byNewest)
+  const primary = mains.find((f) => f.is_primary)
+  if (primary) return primary
+  if (mains.length && new Set(mains.map((f) => norm(f.name))).size === 1) return mains[0]
+  return null
 }
 
 /** Nexus-Bild → Vorschaubild (gleicher Pfad mit /thumbnails/). */

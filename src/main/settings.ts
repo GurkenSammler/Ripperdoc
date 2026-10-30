@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   scanlines: 0.5,
   lastBuild: null,
   language: 'auto',
+  quickInstall: false,
 }
 
 export class SettingsStore {

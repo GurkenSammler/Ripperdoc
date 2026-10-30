@@ -18,6 +18,8 @@ sondern aus einem eigenen Staging-Ordner per **Hardlink** eingespielt. Jede Änd
 | **Tabs (Q / E)** | **Farbschemata** |
 | ![Tabs wechseln](docs/media/tabs.gif) | ![Farbschemata](docs/media/themes.gif) |
 
+![SHARDS: eine geteilte Mod-Liste mit vorhandenen, neueren, älteren und fehlenden Einträgen](docs/media/shards.png)
+
 *Aufgenommen mit Demo-Daten: echte Framework-Namen, ausgedachte Mods. Oberfläche hier auf Englisch.*
 
 ## Stand
@@ -28,6 +30,7 @@ sondern aus einem eigenen Staging-Ordner per **Hardlink** eingespielt. Jede Änd
 | 1 | Import → Analyse → Staging → Hardlink-Deploy, Journal, Purge, Launch | ✅ v0.1 |
 | 2 | Framework-Wächter: CET, RED4ext, redscript, ArchiveXL, TweakXL, Codeware aus GitHub | offen |
 | 3 | Nexus: API-Key, `nxm://`-Knopf, Downloads, Update-Check | ✅ v0.2 |
+| 3+ | Nexus-Requirements, Collections, Teilen (Shards), Auto-Install, Endorse | ✅ v0.4 |
 | 4 | Konflikte in `.archive`-Dateien (RDAR-Scan), `modlist.txt` | offen |
 | 5 | Profile + Savegame-Backups | offen |
 | 6 | Diagnose: Logs nach Spielende, Crash-Bisect | offen |
@@ -44,7 +47,8 @@ sondern aus einem eigenen Staging-Ordner per **Hardlink** eingespielt. Jede Änd
 - Ohne Code-Signing-Zertifikat zeigt Windows SmartScreen beim ersten Start eine Warnung
   („Weitere Informationen → Trotzdem ausführen“).
 - Eigene UI-Sounds für die installierte Version: `%APPDATA%\RIPPERDOC\sounds\sfx_<name>.wav`.
-- Die Steam-Fassung von Cyberpunk 2077 wird automatisch gefunden. Sonst: SYS.CONFIG › „Spielordner wählen…“.
+- Cyberpunk 2077 von Steam, GOG oder Epic wird automatisch gefunden. Sonst: SYS.CONFIG › „Spielordner wählen…“.
+- Doppelklick auf eine `.rdshard`-Datei (geteilte Mod-Liste) öffnet sie in RIPPERDOC (installierte Version).
 - Oberfläche auf Deutsch und Englisch: SYS.CONFIG › Look › Sprache (AUTO folgt der Windows-Sprache).
 
 Pakete bauen: `npm run dist` → `release/<version>/` (Installer, Zip, `win-unpacked/`). `npm run pack` baut nur
@@ -58,7 +62,7 @@ npm install
 node node_modules\electron\install.js
 npm start          # baut und startet
 npm run dev        # mit Hot Reload für die Oberfläche
-npm test           # Tests (Layout-Erkennung, Deployer im Test-Spielordner)
+npm test           # Tests (Layout-Erkennung, Deployer im Test-Spielordner, erster Start, Sprachen, Nexus simuliert)
 npm run typecheck
 npm run shortcut   # Verknüpfung RIPPERDOC auf Desktop + Startmenü (danach Doppelklick)
 ```
@@ -76,6 +80,9 @@ Voraussetzung: Windows 10/11 und Node 22 oder neuer. Zum Entpacken nimmt RIPPERD
   Hat ein Archiv mehrere gleichwertige Ordner („Option A / Option B“), wählt man eine Variante.
 - **Schalter:** wirken sofort (Hardlinks gehen in Millisekunden). Läuft das Spiel, wird nichts geändert.
 - **Reihenfolge:** Zeilen in INVENTORY ziehen. **Oben gewinnt**, wenn zwei Mods dieselbe Datei liefern.
+- **Mehrere auf einmal:** `Strg`+Klick wählt einzelne Mods, `Umschalt`+Klick einen Bereich. Rechts lassen sie sich
+  dann gemeinsam aktivieren, deaktivieren oder entfernen (einmal einspielen statt einmal je Mod).
+- **Suche:** nach Name, Autor oder Nexus-ID. Der Filter PROBLEME zeigt auch Mods mit fehlenden Nexus-Requirements.
 - **Update:** Neues Archiv desselben Mods (gleicher Name oder gleiche Nexus-ID) importieren → „Update
   installieren“ übernimmt Platz und Schalter.
 - **PURGE:** nimmt alles aus dem Spielordner, legt gesicherte Spieldateien zurück, setzt den Script-Cache
@@ -98,6 +105,24 @@ Voraussetzung: Windows 10/11 und Node 22 oder neuer. Zum Entpacken nimmt RIPPERD
   der Datei, sonst Mod-Version. Mit Premium lädt „Update laden“ direkt, ohne Premium führt „Nexus“ zur
   Dateiseite. Ein Update ersetzt den alten Mod an gleicher Stelle; optionale Zusatzdateien desselben Mods
   werden nicht automatisch als Ersatz vorgeschlagen.
+- **Requirements:** Import-Dialog und Mod-Detail zeigen, was die Nexus-Seite des Mods als Requirements nennt, mit
+  ✓ / AUS / FEHLT. Fehlende sind vorausgewählt (nicht die, die der Autor als optional markiert) und werden nach
+  dem Installieren geholt: mit Premium direkt (installieren sich ohne Dialog, wenn nichts zu entscheiden ist),
+  sonst öffnet RIPPERDOC ihre Nexus-Seiten. Bei Mods mit mehreren verschiedenen Hauptdateien wählt man auf Nexus.
+- **Collections (Tab SHARDS):** Link oder Kurzname einer Collection einfügen, oder auf der Website den
+  Download-Knopf der Collection klicken. RIPPERDOC listet jede Datei mit da / andere Version / fehlt, man wählt
+  aus; Premium lädt alles, ohne Premium öffnet RIPPERDOC die Dateiseiten in Fünferportionen (Nexus verlangt je
+  Datei einen Klick auf der Website). Eindeutige Archive installieren sich ohne Dialog und werden am Ende einmal
+  eingespielt. Eigene Installations-Anweisungen der Collection (FOMOD-Auswahl, feste Reihenfolge) werden nicht
+  übernommen.
+- **Teilen (Shards):** SHARDS › Build teilen macht aus der Mod-Liste einen Code (`RDSHARD1:…`), eine
+  `.rdshard`-Datei oder eine Markdown-Liste mit Nexus-Links. Er enthält nur Verweise (Mod, Datei, Version,
+  Reihenfolge, Schalter), nie Dateien. Der Empfänger öffnet ihn wie eine Collection und kann danach Reihenfolge
+  und Schalter übernehmen.
+- **Endorse:** Im Mod-Detail gibt es „Endorse“ (Nexus nimmt das nur für Mods an, die über dein Konto geladen wurden).
+- **Schnell-Installieren:** SYS.CONFIG › Installieren: Nexus-Downloads ohne Dialog, wenn nichts zu entscheiden
+  ist. Dort auch: wie viel Platz die aufbewahrten Archive belegen und „Ungenutzte löschen“ für Archive, die kein
+  installierter Mod mehr braucht.
 - **Nexus gestört:** RIPPERDOC wiederholt hängende oder kaputte Anfragen, lädt abgebrochene Downloads an der
   Abbruchstelle weiter und versucht es im Hintergrund neu. NET zeigt dann „NEXUS GESTÖRT“, den nächsten
   Versuch und was die öffentliche Statusseite von Nexus meldet (die wird ohne Key abgefragt). Installierte

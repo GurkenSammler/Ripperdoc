@@ -30,8 +30,9 @@ Electron, electron-vite, electron-builder, Vite, React, TypeScript, Vitest – M
 `node_modules`).
 
 ## Frameworks and mods
-RIPPERDOC does not ship any mods or frameworks itself. It only installs files you download yourself (later also
-via the frameworks' official GitHub releases and via Nexus Mods with your own API key).
+RIPPERDOC does not ship any mods or frameworks itself. It only installs files you download yourself, also via
+Nexus Mods with your own API key (later also via the frameworks' official GitHub releases). Shared mod lists
+(shards) only contain references to Nexus, never files.
 
 ## Not included
 - `sounds/custom/`: private sounds in the project folder; never go into the repo or a package.

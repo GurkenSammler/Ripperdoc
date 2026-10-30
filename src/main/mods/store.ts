@@ -8,6 +8,7 @@ import { analyze, parseArchiveName, summarize, type Analysis, type Mapping, type
 import { ARCHIVE_EXT, unpackInput } from '../install/extract'
 import { modUrl } from '../nexus/nxm'
 import { exists, keyOf, readJson, safeJoin, walkFiles, writeJson } from '../util/paths'
+import { fileTitleOf, sameTitle } from './identity'
 
 // Staging: jeder Mod liegt in <dataRoot>/mods/<id>/files/ genau so, wie er im Spielordner aussehen soll.
 // Von dort verlinkt der Deployer. Originalarchive bleiben in downloads/.
@@ -33,9 +34,12 @@ const slug = (s: string): string =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 40) || 'mod'
 
+const RETIRED = 'mod.removed.json'
+
 export class ModStore {
   readonly mods = new Map<string, ModRecord>()
   private readonly pending = new Map<string, Pending>()
+  private readonly retired = new Set<string>()
 
   constructor(private readonly dataRoot: string) {}
 
@@ -59,13 +63,53 @@ export class ModStore {
       return
     }
     for (const id of ids) {
-      const rec = await readJson<ModRecord | null>(path.join(this.modsDir, id, 'mod.json'), null)
+      const dir = path.join(this.modsDir, id)
+      const rec = await readJson<ModRecord | null>(path.join(dir, 'mod.json'), null)
       if (rec && rec.id === id) this.mods.set(id, rec)
+      // Von einem Update ausgemustert und beim letzten Lauf nicht mehr gelöscht (z. B. Spiel lief): jetzt weg
+      else if (await exists(path.join(dir, RETIRED))) await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined)
     }
   }
 
   list(): ModRecord[] {
     return [...this.mods.values()]
+  }
+
+  hasPending(token: string): boolean {
+    return this.pending.has(token)
+  }
+
+  /** Archive, deren Import gerade offen ist (Dialog), dürfen beim Aufräumen nicht weg. */
+  pendingInputs(): string[] {
+    return [...this.pending.values()].map((p) => p.input)
+  }
+
+  /** "<modId>:<fileId>" der Nexus-Downloads, deren Import-Dialog gerade offen ist. */
+  pendingNexus(): Set<string> {
+    return new Set([...this.pending.values()].flatMap((p) => (p.meta ? [`${p.meta.modId}:${p.meta.fileId}`] : [])))
+  }
+
+  /**
+   * Durch ein Update ersetzt, während der Spielordner noch nicht neu eingespielt ist: Die Dateien können dort noch
+   * als Hardlink offen sein (Spiel läuft), Löschen schlüge fehl. Also erst nur aus der Liste nehmen und markieren;
+   * purgeRetired() löscht nach dem nächsten Einspielen, load() spätestens beim nächsten Start.
+   */
+  async retire(id: string): Promise<void> {
+    this.mods.delete(id)
+    this.retired.add(id)
+    const dir = path.join(this.modsDir, id)
+    await fs.rename(path.join(dir, 'mod.json'), path.join(dir, RETIRED)).catch(() => undefined)
+  }
+
+  async purgeRetired(): Promise<void> {
+    for (const id of [...this.retired]) {
+      try {
+        await fs.rm(path.join(this.modsDir, id), { recursive: true, force: true })
+        this.retired.delete(id)
+      } catch {
+        // Noch in Benutzung: nächster Versuch nach dem nächsten Einspielen oder beim Start
+      }
+    }
   }
 
   stagedPath = (id: string, dst: string): string => safeJoin(path.join(this.modsDir, id, 'files'), dst)
@@ -93,16 +137,28 @@ export class ModStore {
       if (chained) return { same: chained, sure: true }
       const sameFile = cands.find((m) => m.source.nexusFileId === meta.fileId)
       if (sameFile) return { same: sameFile, sure: true }
-      const mainToMain = cands.find((m) => m.source.nexusCategory === 'MAIN' && meta.category === 'MAIN')
-      if (mainToMain) return { same: mainToMain, sure: true }
+      if (meta.fileTitle) {
+        const titled = cands.find((m) => sameTitle(fileTitleOf(m), meta.fileTitle))
+        if (titled) return { same: titled, sure: true }
+        // Alle Kandidaten haben einen anderen Titel: eine andere Datei desselben Mods (Addon, Teil eines
+        // Multi-File-Mods wie Garage), kein Update. Nichts zum Ersetzen anbieten.
+        if (cands.length && cands.every((m) => fileTitleOf(m) !== null)) return { same: null, sure: false }
+      }
+      const mains = cands.filter((m) => m.source.nexusCategory === 'MAIN')
+      if (meta.category === 'MAIN' && mains.length === 1) return { same: mains[0], sure: true }
       // z. B. eine optionale Datei desselben Mods: anbieten, aber nicht vorbelegen
       return { same: cands[0] ?? null, sure: false }
     }
     const parsed = parseArchiveName(p.archiveName)
     const byName = this.list().find((m) => m.name.toLowerCase() === parsed.name.toLowerCase())
     if (byName) return { same: byName, sure: true }
-    const byId = parsed.nexusModId !== undefined ? this.list().find((m) => m.source.nexusModId === parsed.nexusModId) : undefined
-    return { same: byId ?? null, sure: false }
+    if (parsed.nexusModId === undefined) return { same: null, sure: false }
+    const cands = this.list().filter((m) => m.source.nexusModId === parsed.nexusModId)
+    // Lokales Archiv mit Nexus-Dateinamen: Titel der Datei steckt im Namen ("Garage - Service Ammo-30297-…")
+    const titled = cands.find((m) => sameTitle(fileTitleOf(m), parsed.name))
+    if (titled) return { same: titled, sure: true }
+    // Mehrere Dateien desselben Mods und keine passt: lieber nichts anbieten als die falsche ersetzen
+    return { same: cands.length === 1 ? cands[0] : null, sure: false }
   }
 
   private preview(p: Pending): ImportPreview {
@@ -127,6 +183,7 @@ export class ModStore {
       variants: p.analysis.variants,
       variant: p.variant,
       nexus: p.meta ?? null,
+      nexusModId: p.meta?.modId ?? parsed.nexusModId ?? null,
     }
   }
 
@@ -176,6 +233,8 @@ export class ModStore {
     const p = this.need(decision.token)
     if (p.analysis.variants.length) throw new Error(t('main.import.chooseVariant'))
     const preview = this.preview(p)
+    // Inzwischen kam ein anderer Mod dazu oder ging (z. B. Auto-Installs im Hintergrund): nicht den falschen ersetzen
+    if (decision.replace && decision.replaces !== undefined && decision.replaces !== preview.replaces) throw new Error(t('main.import.replaceChanged'))
     const name = decision.name?.trim() || preview.name
 
     const mapped: Mapping[] = [...p.analysis.mapped]
@@ -227,8 +286,8 @@ export class ModStore {
       name,
       version: preview.version,
       source: meta
-        ? { kind: 'nexus', archive, nexusModId: meta.modId, nexusFileId: meta.fileId, nexusCategory: meta.category }
-        : { kind: 'file', archive, nexusModId: parsed.nexusModId },
+        ? { kind: 'nexus', archive, nexusModId: meta.modId, nexusFileId: meta.fileId, nexusCategory: meta.category, nexusFile: meta.fileTitle }
+        : { kind: 'file', archive, nexusModId: parsed.nexusModId, nexusFile: parsed.nexusModId !== undefined ? parsed.name : undefined },
       nexus:
         nexusId !== undefined ? { author: meta?.author, summary: meta?.summary, picture: meta?.picture, url: modUrl(nexusId) } : undefined,
       installedAt: new Date().toISOString(),
@@ -240,6 +299,7 @@ export class ModStore {
       recommends: summary.recommends,
       skipped,
       rule: p.variant === null ? p.analysis.rule : t('main.import.ruleVariant', p.analysis.rule, p.variant || t('main.import.mainFolder')),
+      origin: meta?.origin,
     }
     await writeJson(path.join(this.modsDir, id, 'mod.json'), rec)
     this.mods.set(id, rec)

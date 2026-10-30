@@ -6,19 +6,33 @@ import { play } from '../sfx'
 import { useCore } from '../state'
 import { Btn, Chip, Micro, Panel, SectionHeader } from '../ui/kit'
 import { TypeChips } from './parts'
+import { defaultPicks, getRequirements, ReqList, ReqStatus, useRequirements } from './Requirements'
 
 const SHOW_FILES = 160
 const NAME_SLOT = '\u0000'
 
 /** "NEW IMPLANT DETECTED": Vorschau eines Imports, Varianten-Wahl, Umgang mit unbekannten Dateien. */
 export function ImportDialog(props: { preview: ImportPreview; remaining: number; onReplace: (p: ImportPreview) => void; onClose: (token: string) => void }) {
-  const { act, toast, inv, setInv } = useCore()
+  const { act, toast, inv, setInv, nexus } = useCore()
   const p = props.preview
   const [name, setName] = useState(p.name)
   const [unknown, setUnknown] = useState<UnknownChoice>('skip')
   const [replace, setReplace] = useState(p.replaceDefault)
   const [working, setWorking] = useState(false)
   const replaced = p.replaces ? inv.mods.find((m) => m.id === p.replaces) : null
+  const reqs = useRequirements(p.nexusModId)
+  // Vorauswahl einmal, sobald die Liste da ist; danach bestimmt der Nutzer
+  const [picked, setPicked] = useState<Set<number> | null>(null)
+  useEffect(() => {
+    if (reqs.list && picked === null) setPicked(defaultPicks(reqs.list))
+  }, [reqs.list, picked])
+  const pick = (id: number, on: boolean) =>
+    setPicked((s) => {
+      const next = new Set(s ?? [])
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,7 +59,8 @@ export function ImportDialog(props: { preview: ImportPreview; remaining: number;
 
   const install = async () => {
     setWorking(true)
-    const out = await act(() => window.rd.commitImport({ token: p.token, unknown, name, replace }))
+    // replaces: der Mod, den dieser Dialog zum Ersetzen gezeigt hat; hat sich das inzwischen geändert, bricht der Main-Prozess ab
+    const out = await act(() => window.rd.commitImport({ token: p.token, unknown, name, replace, replaces: p.replaces }))
     setWorking(false)
     if (!out) return
     if (!out.ok) {
@@ -69,6 +84,9 @@ export function ImportDialog(props: { preview: ImportPreview; remaining: number;
     play('enter')
     setInv(await window.rd.inventory())
     props.onClose(p.token)
+    // Angehakte Requirements jetzt holen (Premium: Download, sonst Nexus-Seiten)
+    const want = (reqs.list ?? []).filter((r) => r.state === 'missing' && picked?.has(r.modId))
+    await getRequirements({ act, toast }, want, out.mod.name)
   }
 
   const needsVariant = p.variants.length > 0
@@ -195,13 +213,29 @@ export function ImportDialog(props: { preview: ImportPreview; remaining: number;
               )}
               {p.blocked.length > 0 && (
                 <div className="import-warn">
-                  <SectionHeader index={4} title={t('inv.import.blocked')} status={`${p.blocked.length} FILES`} />
+                  <SectionHeader index={p.unknown.length ? 4 : 3} title={t('inv.import.blocked')} status={`${p.blocked.length} FILES`} />
                   <p className="alert">{t('inv.import.blockedHint')}</p>
                   <ul className="filelist filelist--short">
                     {p.blocked.slice(0, 8).map((b) => (
                       <li key={b}>{b}</li>
                     ))}
                   </ul>
+                </div>
+              )}
+              {p.nexusModId !== null && (
+                <div className="import-warn">
+                  <SectionHeader
+                    index={3 + (p.unknown.length ? 1 : 0) + (p.blocked.length ? 1 : 0)}
+                    title={t('inv.req.title')}
+                    status={reqs.list ? `${reqs.list.filter((r) => r.state === 'ok').length}/${reqs.list.length} OK` : undefined}
+                  />
+                  <ReqStatus loading={reqs.loading} error={reqs.error} />
+                  {reqs.list && <ReqList list={reqs.list} picked={picked ?? undefined} onPick={pick} />}
+                  {reqs.list?.some((r) => r.state === 'missing') && (
+                    <p className="dim req__note">
+                      {t('inv.req.alsoGet')} · {nexus.user?.premium ? t('inv.req.premiumNote') : t('inv.req.freeNote')}
+                    </p>
+                  )}
                 </div>
               )}
             </>
@@ -213,7 +247,14 @@ export function ImportDialog(props: { preview: ImportPreview; remaining: number;
             {t('common.cancel')}
           </Btn>
           {!needsVariant && (
-            <Btn variant="primary" onClick={install} disabled={working || nothing} sfx="press">
+            <Btn
+              variant="primary"
+              onClick={install}
+              // Erst wenn die Requirements da sind, sonst gingen die Haken verloren
+              disabled={working || nothing || reqs.loading}
+              title={reqs.loading ? t('inv.req.loading') : undefined}
+              sfx="press"
+            >
               {replace && replaced ? t('inv.import.installUpdate') : t('inv.import.install')}
             </Btn>
           )}

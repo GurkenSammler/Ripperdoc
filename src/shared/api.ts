@@ -2,6 +2,8 @@ import type {
   ApplyReport,
   AppInfo,
   DownloadItem,
+  DownloadsUsage,
+  FetchRun,
   GameInfo,
   GameRunState,
   ImportDecision,
@@ -10,9 +12,13 @@ import type {
   ImportPreview,
   InventoryView,
   JournalEntry,
+  ModPlan,
+  NexusRequirement,
   NexusStatus,
   PurgeReport,
   Settings,
+  ShareExport,
+  ShareOptions,
   UpdateInfo,
   VerifyReport,
 } from './types'
@@ -43,7 +49,7 @@ export interface CoreApi {
   verify(): Promise<VerifyReport>
   journal(limit: number): Promise<JournalEntry[]>
   launch(): Promise<void>
-  openFolder(which: 'game' | 'data' | 'mod', id?: string): Promise<void>
+  openFolder(which: 'game' | 'data' | 'mod' | 'downloads', id?: string): Promise<void>
   pickFiles(): Promise<string[]>
   pendingImports(): Promise<ImportPreview[]>
   // Nexus
@@ -60,6 +66,32 @@ export interface CoreApi {
   checkUpdates(): Promise<Record<string, UpdateInfo>>
   downloadUpdate(recordId: string): Promise<DownloadItem>
   openNexus(nexusModId: number | null): Promise<void>
+  // Mehrere auf einmal
+  setEnabledMany(ids: string[], on: boolean): Promise<InventoryView>
+  removeMany(ids: string[]): Promise<InventoryView>
+  // Requirements (Nexus-Seite eines Mods)
+  requirements(nexusModId: number, refresh?: boolean): Promise<NexusRequirement[]>
+  fetchRequirements(list: { modId: number; name: string }[], parent: string): Promise<FetchRun>
+  // Collections und Shards
+  loadCollection(input: string): Promise<ModPlan>
+  readShard(text: string): Promise<ModPlan>
+  readShardFile(path: string): Promise<ModPlan>
+  openShardFile(): Promise<ModPlan | null>
+  plan(id: string): Promise<ModPlan | null>
+  closePlan(id: string): Promise<void>
+  pendingPlans(): Promise<ModPlan[]>
+  planDownload(id: string, keys: string[], force?: boolean): Promise<FetchRun>
+  planApplyOrder(id: string): Promise<InventoryView>
+  shareExport(o: ShareOptions): Promise<ShareExport>
+  shareSave(o: ShareOptions): Promise<string | null>
+  copyText(text: string): Promise<void>
+  openUrl(url: string): Promise<void>
+  // Downloads-Ordner
+  downloadsUsage(): Promise<DownloadsUsage>
+  cleanDownloads(): Promise<DownloadsUsage>
+  // Endorsements (Nexus-Mod-IDs, die das Konto empfohlen hat)
+  nexusEndorsed(refresh?: boolean): Promise<number[]>
+  nexusEndorse(nexusModId: number, version: string, on: boolean): Promise<number[]>
 }
 
 export const CORE_METHODS: (keyof CoreApi)[] = [
@@ -102,9 +134,30 @@ export const CORE_METHODS: (keyof CoreApi)[] = [
   'checkUpdates',
   'downloadUpdate',
   'openNexus',
+  'setEnabledMany',
+  'removeMany',
+  'requirements',
+  'fetchRequirements',
+  'loadCollection',
+  'readShard',
+  'readShardFile',
+  'openShardFile',
+  'plan',
+  'closePlan',
+  'pendingPlans',
+  'planDownload',
+  'planApplyOrder',
+  'shareExport',
+  'shareSave',
+  'copyText',
+  'openUrl',
+  'downloadsUsage',
+  'cleanDownloads',
+  'nexusEndorsed',
+  'nexusEndorse',
 ]
 
-export type CoreEvent = 'game-state' | 'busy' | 'inventory' | 'downloads' | 'imports' | 'nexus' | 'notify'
+export type CoreEvent = 'game-state' | 'busy' | 'inventory' | 'downloads' | 'imports' | 'nexus' | 'notify' | 'plan'
 
 export interface RipperdocApi extends CoreApi {
   /** Echter Pfad einer per Drag & Drop abgelegten Datei. */

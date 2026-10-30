@@ -48,6 +48,21 @@ export const config = area({
     'config.maint.unmanagedHint': 'Dateien in Mod-Ordnern, die weder RIPPERDOC noch dem Spiel gehören (manuell installiert oder zur Laufzeit erzeugt):',
     'config.maint.autoRepair': 'Der nächste Schalter oder LAUNCH repariert das automatisch.',
 
+    // Installieren + Downloads-Ordner
+    'config.install.title': 'Installieren',
+    'config.install.quick': 'Schnell-Installieren',
+    'config.install.quickHint':
+      'Nexus-Downloads ohne Dialog installieren, wenn nichts zu entscheiden ist (eine Fassung, nichts Unbekanntes). Collections und Requirements machen das immer.',
+    'config.install.archives': 'Archive',
+    'config.install.usage': (files: number, size: string) => `${files === 1 ? '1 Archiv' : `${files} Archive`} · ${size}`,
+    'config.install.unused': (files: number, size: string) => `${files === 1 ? '1 ungenutztes' : `${files} ungenutzte`} · ${size}`,
+    'config.install.clean': 'Ungenutzte löschen',
+    'config.install.cleanHint': 'Archive, die zu keinem installierten Mod mehr gehören (nach Entfernen oder Updates)',
+    'config.install.cleaned': (size: string) => `${size} freigegeben.`,
+    'config.install.cleanTitle': 'AUFGERÄUMT',
+    'config.install.cleanSure': (size: string) => `Wirklich ${size} löschen?`,
+    'config.install.openDownloads': 'Ordner',
+
     // About
     'config.about.note': 'Hinweis',
     'config.about.disclaimer':
@@ -92,6 +107,20 @@ export const config = area({
     'config.maint.unmanaged': (n: number) => `${n} UNMANAGED`,
     'config.maint.unmanagedHint': 'Files in mod folders that belong to neither RIPPERDOC nor the game (installed manually or created at runtime):',
     'config.maint.autoRepair': 'The next toggle or LAUNCH fixes this automatically.',
+
+    'config.install.title': 'Install',
+    'config.install.quick': 'Quick install',
+    'config.install.quickHint':
+      'Install Nexus downloads without the dialog when there is nothing to decide (one variant, nothing unknown). Collections and requirements always do this.',
+    'config.install.archives': 'Archives',
+    'config.install.usage': (files: number, size: string) => `${files === 1 ? '1 archive' : `${files} archives`} · ${size}`,
+    'config.install.unused': (files: number, size: string) => `${files} unused · ${size}`,
+    'config.install.clean': 'Delete unused',
+    'config.install.cleanHint': 'Archives that no longer belong to an installed mod (after removing or updating)',
+    'config.install.cleaned': (size: string) => `${size} freed.`,
+    'config.install.cleanTitle': 'CLEANED UP',
+    'config.install.cleanSure': (size: string) => `Really delete ${size}?`,
+    'config.install.openDownloads': 'Folder',
 
     'config.about.note': 'Note',
     'config.about.disclaimer':

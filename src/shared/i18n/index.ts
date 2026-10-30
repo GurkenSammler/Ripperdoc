@@ -4,15 +4,16 @@ import { config } from './config'
 import { inventory } from './inventory'
 import { main } from './main'
 import { net } from './net'
+import { shards } from './shards'
 import { shell } from './shell'
 
 export type { Lang, LangSetting } from './area'
 
 // Main-Prozess und Oberfläche nutzen dasselbe Wörterbuch, jeder mit seiner eigenen aktuellen Sprache.
-export const AREAS = { common, main, inventory, shell, net, config }
+export const AREAS = { common, main, inventory, shell, net, config, shards }
 
-const DE = { ...common.de, ...main.de, ...inventory.de, ...shell.de, ...net.de, ...config.de }
-const EN: typeof DE = { ...common.en, ...main.en, ...inventory.en, ...shell.en, ...net.en, ...config.en }
+const DE = { ...common.de, ...main.de, ...inventory.de, ...shell.de, ...net.de, ...config.de, ...shards.de }
+const EN: typeof DE = { ...common.en, ...main.en, ...inventory.en, ...shell.en, ...net.en, ...config.en, ...shards.en }
 
 export type TKey = keyof typeof DE
 type Args<K extends TKey> = (typeof DE)[K] extends (...a: infer A) => string ? A : []

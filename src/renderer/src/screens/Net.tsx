@@ -254,6 +254,7 @@ const RUNNING = new Set<DownloadItem['state']>(['queued', 'preparing', 'download
 function Downloads() {
   const { downloads, act } = useCore()
   const finished = downloads.some((d) => ['done', 'error', 'canceled'].includes(d.state))
+  const queued = downloads.filter((d) => d.state === 'queued')
   const retry = (id: string) => act(() => window.rd.retryDownload(id))
   return (
     <>
@@ -268,7 +269,11 @@ function Downloads() {
                 <div className="dl__head">
                   <span className="dl__name">{d.name}</span>
                   {d.version !== '?' && <Micro>V {d.version}</Micro>}
+                  {d.origin && <Micro className="dl__origin">{d.origin.title}</Micro>}
                   <span className="dl__spacer" />
+                  {d.auto && d.state !== 'done' && (
+                    <Chip title={t('net.dl.autoHint')}>{t('net.dl.auto')}</Chip>
+                  )}
                   <Chip tone={d.state === 'done' ? 'ok' : d.state === 'error' ? 'alert' : d.state === 'downloading' || d.state === 'preparing' ? 'accent' : undefined}>
                     {t(STATE_LABEL[d.state])}
                   </Chip>
@@ -308,11 +313,19 @@ function Downloads() {
             ))}
           </div>
         )}
-        {finished && (
+        {(finished || queued.length > 1) && (
           <div className="config__buttons">
-            <Btn size="small" onClick={() => window.rd.clearDownloads()}>
-              {t('net.dl.hideFinished')}
-            </Btn>
+            {finished && (
+              <Btn size="small" onClick={() => window.rd.clearDownloads()}>
+                {t('net.dl.hideFinished')}
+              </Btn>
+            )}
+            {/* Eine Collection reiht Hunderte ein: alle wartenden auf einmal abbrechen */}
+            {queued.length > 1 && (
+              <Btn size="small" onClick={() => queued.forEach((d) => void window.rd.cancelDownload(d.id))}>
+                {t('net.dl.cancelQueued', queued.length)}
+              </Btn>
+            )}
           </div>
         )}
       </Panel>
@@ -364,14 +377,16 @@ function Updates() {
                       {t('common.error')}
                     </Chip>
                   ) : u?.hasUpdate ? (
-                    <Chip tone="warn">UPDATE</Chip>
+                    <Chip tone="warn" title={u.latestFileId ? undefined : t('net.up.outdatedHint')}>
+                      {u.latestFileId ? 'UPDATE' : t('net.up.pickFile')}
+                    </Chip>
                   ) : u ? (
                     <Chip tone="ok">{t('net.up.current')}</Chip>
                   ) : (
                     <Chip>?</Chip>
                   )}
                   {u?.hasUpdate &&
-                    (nexus.user?.premium ? (
+                    (nexus.user?.premium && u.latestFileId ? (
                       <Btn size="small" variant="primary" onClick={() => fetchUpdate(m.id)}>
                         {t('net.up.download')}
                       </Btn>

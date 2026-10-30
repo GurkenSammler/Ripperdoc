@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AppInfo, DownloadItem, GameInfo, GameRunState, ImportPreview, InventoryView, NexusStatus, Notice, PurgeReport, Settings } from '@shared/types'
+import type {
+  AppInfo,
+  DownloadItem,
+  GameInfo,
+  GameRunState,
+  ImportPreview,
+  InventoryView,
+  ModPlan,
+  NexusStatus,
+  Notice,
+  PurgeReport,
+  Settings,
+} from '@shared/types'
 import { BRAND } from '@shared/brand'
 import { getLang, resolveLang, setLang, t } from '@shared/i18n'
 import { configureSfx, loadSfx, play } from './sfx'
@@ -14,6 +26,9 @@ import { Journal } from './screens/Journal'
 import { SysConfig } from './screens/SysConfig'
 import { Net } from './screens/Net'
 import { PurgeDialog } from './screens/PurgeDialog'
+import { Shards } from './screens/Shards'
+
+const isShardFile = (p: string): boolean => /\.rdshard$/i.test(p)
 
 const query = new URLSearchParams(location.search)
 
@@ -59,6 +74,9 @@ export function App() {
   const [purge, setPurge] = useState<'ask' | PurgeReport | null>(null)
   const [nexus, setNexus] = useState<NexusStatus | null>(null)
   const [downloads, setDownloads] = useState<DownloadItem[]>([])
+  const [plan, setPlan] = useState<ModPlan | null>(null)
+  const planRef = useRef<ModPlan | null>(null)
+  planRef.current = plan
   const [startError, setStartError] = useState<string | null>(null)
   const nextToast = useRef(1)
   const toastRef = useRef<(t: Omit<Toast, 'id'>) => void>(() => undefined)
@@ -123,6 +141,12 @@ export function App() {
       // Imports, die vor dem Start der Oberfläche fertig wurden (App per nxm-Klick gestartet)
       const waiting = await window.rd.pendingImports()
       if (waiting.length) setImports((q) => [...q, ...waiting])
+      // Collection per Knopf auf der Website, bevor das Fenster da war
+      const plans = await window.rd.pendingPlans()
+      if (plans.length) {
+        setPlan(plans[plans.length - 1])
+        setScreen('shards')
+      }
     })().catch((err) => setStartError(cleanError(err)))
     const offs = [
       window.rd.on('busy', (p) => setBusy((p as string | null) ?? null)),
@@ -135,6 +159,15 @@ export function App() {
         setImports((q) => [...q, ...(p as ImportPreview[])])
       }),
       window.rd.on('notify', (p) => toastRef.current(p as Notice)),
+      window.rd.on('plan', (p) => {
+        play('menu_open')
+        // Klick auf der Website (oder Doppelklick auf eine .rdshard): die neue Liste zeigen, die alte nennen
+        const prev = planRef.current
+        const next = p as ModPlan
+        if (prev && prev.id !== next.id) toastRef.current({ tone: 'info', title: 'SHARDS', body: t('shards.plan.replaced', prev.title) })
+        setPlan(next)
+        setScreen('shards')
+      }),
     ]
     return () => offs.forEach((off) => off())
   }, [])
@@ -163,7 +196,18 @@ export function App() {
   }, [])
 
   const startImport = useCallback(
-    async (paths: string[]) => {
+    async (all: string[]) => {
+      // .rdshard-Dateien sind Listen, keine Mods: in SHARDS öffnen
+      const shard = all.find(isShardFile)
+      if (shard) {
+        const p = await act(() => window.rd.readShardFile(shard))
+        if (p) {
+          play('menu_open')
+          setPlan(p)
+          setScreen('shards')
+        }
+      }
+      const paths = all.filter((p) => !isShardFile(p))
       if (paths.length === 0) return
       const res = await act(() => window.rd.prepare(paths))
       if (!res) return
@@ -194,7 +238,11 @@ export function App() {
   // Q / E wie im Spiel, Strg+O öffnet den Datei-Dialog
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT' || imports.length || purge) return
+      // Nur Texteingaben sperren Q/E (nicht Checkboxen, die nach einem Klick den Fokus haben)
+      const el = e.target as HTMLElement | null
+      const typing = el?.tagName === 'TEXTAREA' || (el?.tagName === 'INPUT' && !['checkbox', 'radio', 'range'].includes((el as HTMLInputElement).type))
+      if (typing || imports.length || purge) return
+      if ((e.key === 'q' || e.key === 'Q' || e.key === 'e' || e.key === 'E') && (e.ctrlKey || e.altKey || e.metaKey)) return
       const idx = SCREENS.findIndex((s) => s.id === screen)
       if (e.key === 'q' || e.key === 'Q') go(SCREENS[(idx + SCREENS.length - 1) % SCREENS.length].id)
       else if (e.key === 'e' || e.key === 'E') go(SCREENS[(idx + 1) % SCREENS.length].id)
@@ -265,10 +313,12 @@ export function App() {
             act,
             startImport,
             go,
+            plan,
+            setPlan,
             replayBoot: () => setBoot(true),
           }
         : null,
-    [app, game, settings, inv, nexus, downloads, run, busy, refresh, reloadGame, saveSettings, toast, act, startImport, go],
+    [app, game, settings, inv, nexus, downloads, run, busy, refresh, reloadGame, saveSettings, toast, act, startImport, go, plan],
   )
 
   const launch = async () => {
@@ -303,7 +353,7 @@ export function App() {
   const activeDl = downloads.filter((d) => d.state === 'queued' || d.state === 'preparing' || d.state === 'downloading')
   const dlTotal = activeDl.reduce((n, d) => n + d.total, 0)
   const dlPercent = dlTotal ? Math.floor((activeDl.reduce((n, d) => n + d.received, 0) / dlTotal) * 100) : 0
-  const Screen = { inventory: Inventory, cyberware: Cyberware, loadorder: LoadOrder, net: Net, journal: Journal, config: SysConfig }[screen]
+  const Screen = { inventory: Inventory, cyberware: Cyberware, loadorder: LoadOrder, net: Net, shards: Shards, journal: Journal, config: SysConfig }[screen]
 
   return (
     <CoreCtx.Provider value={ctx}>
@@ -405,7 +455,7 @@ export function App() {
             </Micro>
             <Micro className={inv!.deploy.snapshot ? 'ok' : ''}>{inv!.deploy.snapshot ? 'VANILLA SNAPSHOT OK' : 'NO SNAPSHOT YET'}</Micro>
             <span className="footer__spacer" />
-            <Micro>[DRAG] INSTALL · [CTRL+O] PICK FILES · [Q/E] TABS</Micro>
+            <Micro>[DRAG] INSTALL · [CTRL+O] PICK FILES · [CTRL/SHIFT+CLICK] MULTI · [Q/E] TABS</Micro>
             <Barcode seed={app!.version.length * 31} />
             <Micro>
               V{app!.version} · E{app!.electron.split('.')[0]}

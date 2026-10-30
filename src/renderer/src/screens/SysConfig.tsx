@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { t, type LangSetting } from '@shared/i18n'
-import type { ThemeName, VerifyReport } from '@shared/types'
+import type { DownloadsUsage, ThemeName, VerifyReport } from '@shared/types'
 import { play } from '../sfx'
-import { useCore } from '../state'
+import { fmtBytes, useCore } from '../state'
 import { Btn, Chip, Micro, Panel, SectionHeader, Switch } from '../ui/kit'
 
 const THEMES: ThemeName[] = ['RED', 'AMBER', 'ACID', 'VIOLET', 'ICE']
@@ -12,6 +12,61 @@ const LANGS: [LangSetting, string][] = [
   ['de', 'DEUTSCH'],
   ['en', 'ENGLISH'],
 ]
+
+/** Schnell-Installieren und der Downloads-Ordner (Archive, die zu keinem Mod mehr gehören). */
+function InstallBox() {
+  const { settings, saveSettings, act, toast, inv } = useCore()
+  const [usage, setUsage] = useState<DownloadsUsage | null>(null)
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    void window.rd.downloadsUsage().then(setUsage)
+  }, [inv])
+  useEffect(() => {
+    if (!armed) return
+    const timer = setTimeout(() => setArmed(false), 3500)
+    return () => clearTimeout(timer)
+  }, [armed])
+  const clean = async () => {
+    if (!armed) return setArmed(true)
+    setArmed(false)
+    const freed = usage?.unusedBytes ?? 0
+    const next = await act(() => window.rd.cleanDownloads())
+    if (!next) return
+    setUsage(next)
+    toast({ tone: 'ok', title: t('config.install.cleanTitle'), body: t('config.install.cleaned', fmtBytes(freed)) })
+  }
+  return (
+    <>
+      <SectionHeader index={4} title={t('config.install.title')} status={settings.quickInstall ? 'QUICK' : 'DIALOG'} />
+      <Panel cut={14} className="config__box">
+        <div className="config__row">
+          <span className="label">{t('config.install.quick')}</span>
+          <Switch on={settings.quickInstall} onChange={(on) => void saveSettings({ quickInstall: on })} />
+        </div>
+        <p className="dim config__hint">{t('config.install.quickHint')}</p>
+        <div className="config__row">
+          <span className="label">{t('config.install.archives')}</span>
+          {usage ? (
+            <>
+              <Micro>{t('config.install.usage', usage.files, fmtBytes(usage.bytes))}</Micro>
+              {usage.unused > 0 && <Micro className="special">{t('config.install.unused', usage.unused, fmtBytes(usage.unusedBytes))}</Micro>}
+            </>
+          ) : (
+            <Micro>…</Micro>
+          )}
+        </div>
+        <div className="config__buttons">
+          <Btn size="small" variant="danger" onClick={clean} disabled={!usage?.unused} title={t('config.install.cleanHint')} sfx={armed ? 'press' : 'menu_open'}>
+            {armed ? t('config.install.cleanSure', fmtBytes(usage?.unusedBytes ?? 0)) : t('config.install.clean')}
+          </Btn>
+          <Btn size="small" onClick={() => window.rd.openFolder('downloads')}>
+            {t('config.install.openDownloads')}
+          </Btn>
+        </div>
+      </Panel>
+    </>
+  )
+}
 
 export function SysConfig() {
   const { settings, saveSettings, app, game, act, replayBoot, reloadGame, toast } = useCore()
@@ -140,10 +195,12 @@ export function SysConfig() {
             <Micro>{settings.launchMode === 'steam' && !steamOnly ? t('config.launch.skipIntroSteam') : '-SKIPSTARTSCREEN'}</Micro>
           </div>
         </Panel>
+
+        <InstallBox />
       </div>
 
       <div className="config__col">
-        <SectionHeader index={4} title={t('config.paths.title')} status={app.sameVolume ? 'HARDLINK' : 'COPY'} />
+        <SectionHeader index={5} title={t('config.paths.title')} status={app.sameVolume ? 'HARDLINK' : 'COPY'} />
         <Panel cut={14} className="config__box">
           <dl className="kv">
             <dt>{t('config.paths.game')}</dt>
@@ -175,7 +232,7 @@ export function SysConfig() {
           </div>
         </Panel>
 
-        <SectionHeader index={5} title={t('config.maint.title')} />
+        <SectionHeader index={6} title={t('config.maint.title')} />
         <Panel cut={14} className="config__box">
           <div className="config__buttons">
             <Btn size="small" onClick={runVerify} disabled={!game.found}>
@@ -208,7 +265,7 @@ export function SysConfig() {
           )}
         </Panel>
 
-        <SectionHeader index={6} title="About" />
+        <SectionHeader index={7} title="About" />
         <Panel cut={14} className="config__box">
           <dl className="kv">
             <dt>Version</dt>

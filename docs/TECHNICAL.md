@@ -11,8 +11,9 @@ src/main/        Node side: everything that touches files
   index.ts       window, IPC (one handler per CORE_METHODS entry), test hooks
   game/          Steam (registry + libraryfolders.vdf + appmanifest), GOG, Epic, PE version reader
   install/       extraction (Windows tar), layout detection (analyze.ts)
-  mods/          staging (store.ts), profile (profiles.ts)
+  mods/          staging (store.ts), profile (profiles.ts), Nexus file titles (identity.ts)
   deploy/        planning, deployer, guard, journal, snapshot
+  plans.ts       collections + shards: build, encode/decode, match against the inventory
   launch.ts      game launch + process monitoring (tasklist)
 src/preload/     contextBridge: window.rd (only invoke + events, no Node APIs)
 src/renderer/    UI (React), UI kit in ui/kit.tsx, styles in styles/
@@ -84,11 +85,51 @@ the snapshot. Only if the game build is the same; otherwise a hint to run Steam 
   every 10 min). If an attempt succeeds, `onRecovered` catches up on a due update check. The update check
   aborts during an outage, keeps old results and doesn't set `checkedAt`.
 
+- `graph.ts`: GraphQL API v2 (`https://api.nexusmods.com/v2/graphql`, POST, works without a key; the key is sent
+  when present). `legacyMods(ids: [{gameId: 3333, modId}])` in batches of 50 for requirements
+  (`modRequirements.nexusRequirements`, external ones and other games dropped) and mod briefs (name, author,
+  picture, adult, status); `collectionRevision(slug, revision, domainName: "cyberpunk2077")` for collections.
+  The full `tileImage.url` 404s on the CDN, so the plan uses `thumbnailUrl(size: med)`. GraphQL errors arrive
+  with HTTP 200 in `errors[]`; `NOT_FOUND` → 404, others → 400 (never treated as an outage).
+- `requirements.ts`: cache `<data>/nexus-requirements.json` (24 h). Optional = author's note matches “optional”,
+  “only if/for”, “not required”, … (Nexus has no field for it). The inventory only reads the cache.
+- `service.ts` extras: `downloadMain(modId)` (Premium; `pickMainFile`: primary, else the only MAIN title, else
+  ambiguous → 409 → open the page), `expect(modId, fileId|0, tags)` so an nxm click from a page RIPPERDOC opened
+  keeps `auto` + `origin`. `DownloadItem.auto/origin` → `NexusMeta` → `ModRecord.origin`.
+- Update check (`computeUpdate`): chain first; a file still in a live category = no update (multi-file mods);
+  dead file without chain → successor with the same normalized title (`identity.ts normTitle`: lowercase,
+  alphanumerics only, dotted/v-prefixed version numbers removed), else the only MAIN if it was a MAIN, else
+  `hasUpdate` with `latestFileId: null` (UI: “UPDATE ?” + Nexus button).
+
+Auto-install (`core.ts`): `importDownloaded` commits with `defer` when `meta.auto` or `settings.quickInstall`
+and the preview is clean (no variants/unknown/blocked, `mapped > 0`, replacement certain). Deferred commits only
+stage and enable; `scheduleAutoApply` waits until no auto download is queued/running (max 60 s) and then runs
+one `applyNow` with one notice. If that fails (game running), the batch stays, one warning, retry after 60 s or
+when the GameWatcher reports `exited`. `idle()` (before quit) flushes a pending batch. A replaced mod is not
+deleted right away: `ModStore.retire()` drops it from the list and renames `mod.json` → `mod.removed.json`
+(its files may still be hardlinked and open in the running game); `purgeRetired()` runs after every successful
+`applyNow`, `ModStore.load()` removes leftovers at start. `ImportDecision.replaces` pins the replace target shown
+in the dialog; if it changed meanwhile, the commit is refused before staging.
+
+Plans (`plans.ts`): `StoredPlan` = entries without state; `resolvePlan()` computes installed (same file ID; for
+file ID 0 the same title, else the only record of that mod) / update (same mod and file title, plan version
+newer per `compareVersions`) / older (same, but equal or older – never auto-replaced, downloaded with `auto:
+false`) / missing / unavailable, plus a running download per entry; entries whose import dialog is open count as
+running (`ModStore.pendingNexus()`). nxm tags from `expect()` carry the plan ID and expire after 30 min;
+`closePlan` drops them. Endorse: v1 `POST /games/cyberpunk2077/mods/{id}/endorse.json|abstain.json` with form
+`version`, state from `GET /user/endorsements.json` (cached 10 min). `.rdshard` file association in
+`electron-builder.yml`; `index.ts` passes the path from argv (cold start or `second-instance`) to
+`Core.openShardPath`. Shard JSON: `{rd:1, t, p, c, m:[[modId, fileId, name,
+version, on, title?]], l:[[name, version]]}`, max 3000 entries; the code is `RDSHARD1:` + deflateRaw + base64url.
+Without Premium `planDownload` opens 5 pages per call (`fileUrl`: `?tab=files&file_id=…&nmm=1`) and remembers
+which ones were opened.
+
 Registration (`index.ts`): `app.setAsDefaultProtocolClient('nxm', electron.exe, [project folder])` →
 `HKCU\Software\Classes\nxm`, command `"electron.exe" "<project folder>" "%1"` (dev build); the installed version
 registers `"RIPPERDOC.exe" "%1"`. Links arrive via
 `process.argv` (cold start) or `second-instance` (app already open). Imports that are ready before the UI
-are buffered by `Core.pendingImports()`.
+are buffered by `Core.pendingImports()`, collections from `nxm://…/collections/<slug>/revisions/<n>` by
+`Core.pendingPlans()`.
 
 ## Game detection
 

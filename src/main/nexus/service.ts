@@ -1,14 +1,33 @@
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { t } from '@shared/i18n'
-import type { DownloadItem, ModRecord, NexusHealth, NexusMeta, NexusOutage, NexusStatus, NexusUser, NxmState, UpdateInfo } from '@shared/types'
+import type {
+  DownloadItem,
+  ModOrigin,
+  ModRecord,
+  NexusHealth,
+  NexusMeta,
+  NexusOutage,
+  NexusStatus,
+  NexusUser,
+  NxmState,
+  UpdateInfo,
+} from '@shared/types'
+import { fileTitleOf } from '../mods/identity'
 import { readJson, writeJson } from '../util/paths'
 import { NexusClient, NexusError } from './client'
 import { DownloadQueue } from './downloads'
 import { KeyStore, type Crypto } from './keystore'
 import { NEXUS_GAME, parseNxm, redactNxm } from './nxm'
+import { RequirementsCache } from './requirements'
 import { fetchHealth } from './statuspage'
-import { computeUpdate, predecessors, thumbnailOf } from './updates'
+import { computeUpdate, pickMainFile, predecessors, thumbnailOf } from './updates'
+
+/** Wie ein Download weiterbehandelt wird: ohne Dialog installieren, wenn klar; woher er kommt. */
+export interface DownloadTags {
+  auto?: boolean
+  origin?: ModOrigin
+}
 
 // Alles rund um Nexus: Key, Konto-Status, nxm-Links, Downloads, Update-Check.
 // Bei Störungen bleibt das zuletzt bekannte Konto stehen (Premium-Downloads gehen weiter, sobald Nexus
@@ -54,6 +73,8 @@ const UPDATE_TTL = 6 * 60 * 60 * 1000
 const RECONNECT = [30_000, 60_000, 120_000, 300_000, 600_000]
 const HEALTH_TTL = 3 * 60 * 1000
 const UPDATE_WORKERS = 3
+const EXPECT_TTL = 30 * 60 * 1000
+const ENDORSE_TTL = 10 * 60 * 1000
 
 /** Störung oder Limit: nicht die Schuld des Keys, später noch einmal. */
 const isOutage = (err: unknown): err is NexusError => err instanceof NexusError && (err.transient || err.status === 429)
@@ -72,9 +93,15 @@ export class NexusService {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectStep = 0
   private healthPending: Promise<void> | null = null
+  readonly reqs: RequirementsCache
+  // Dateien aus einem Plan, deren nxm-Klick ohne Premium noch kommt: "<modId>:<fileId>" (0 = Hauptdatei)
+  // plan: aus welchem Plan (zum Vergessen beim Schließen); at: Ablauf nach EXPECT_TTL
+  private readonly expected = new Map<string, { tags: DownloadTags; plan?: string; at: number }>()
+  private endorsed: { at: number; ids: Set<number> } | null = null
 
   constructor(private readonly o: NexusServiceOptions) {
     const tune = o.tuning ?? {}
+    this.reqs = new RequirementsCache(path.join(o.dataRoot, 'nexus-requirements.json'))
     this.keys = new KeyStore(path.join(o.userData, 'nexus-key.bin'), o.crypto)
     this.client = new NexusClient(() => this.keys.key, o.appVersion, {
       fetchImpl: o.fetchImpl,
@@ -106,6 +133,7 @@ export class NexusService {
   /** Ohne Netz: das Fenster soll sofort kommen. Geprüft wird danach im Hintergrund (validate). */
   async init(): Promise<void> {
     this.cache = await readJson<UpdateCache>(this.cacheFile, { checkedAt: null, results: {} })
+    await this.reqs.load()
     if (await this.keys.load()) this.user = await readJson<Account | null>(this.accountFile, null)
   }
 
@@ -145,6 +173,8 @@ export class NexusService {
       this.o.emitStatus()
       return
     }
+    // Ohne Key (nur öffentliche Abfragen) gibt es keinen Neuverbindungs-Takt; eine Störungsanzeige bliebe hängen
+    if (!this.keys.key) return
     const first = !this.outage
     this.outage = { message: err.message, since: this.outage?.since ?? Date.now(), retryAt: this.outage?.retryAt ?? null }
     if (!this.reconnectTimer) this.scheduleReconnect()
@@ -265,13 +295,21 @@ export class NexusService {
    * Download sofort einreihen; Mod- und Dateidaten holt der Auftrag selbst. So geht ein Klick auf der
    * Website auch dann nicht verloren, wenn Nexus gerade hängt: der Eintrag zeigt den Fehler + „Nochmal“.
    */
-  private enqueue(modId: number, fileId: number, auth: { key: string; expires: number } | undefined, replaceRecord?: string): DownloadItem {
+  private enqueue(
+    modId: number,
+    fileId: number,
+    auth: { key: string; expires: number } | undefined,
+    replaceRecord?: string,
+    tags: DownloadTags = {},
+  ): DownloadItem {
     return this.queue.add({
       name: t('main.nexus.modPlaceholder', modId),
       version: '?',
       modId,
       fileId,
       linkExpires: auth?.expires,
+      auto: tags.auto,
+      origin: tags.origin,
       prepare: async () => {
         const [mod, files] = await Promise.all([this.client.mod(modId), this.client.files(modId)])
         const file = files.files.find((f) => f.file_id === fileId)
@@ -288,6 +326,9 @@ export class NexusService {
           picture: thumbnailOf(mod.picture_url),
           supersedes: predecessors(files, fileId),
           replaceRecord,
+          fileTitle: file.name || undefined,
+          auto: tags.auto,
+          origin: tags.origin,
         }
         return {
           name: file.name || mod.name,
@@ -318,13 +359,64 @@ export class NexusService {
     if (!this.keys.key) throw new Error(t('main.nexus.keyFirstUplink'))
     const auth = link.key && link.expires ? { key: link.key, expires: link.expires } : undefined
     if (!auth && !this.user?.premium) throw new Error(t('main.nexus.noAuth'))
-    return this.enqueue(link.modId, link.fileId, auth)
+    // Gehört der Klick zu einem Plan (Collection, Shard, Requirement)? Dann so weiterbehandeln wie dort gewählt
+    const key = `${link.modId}:${link.fileId}`
+    const hit = [this.expected.get(key), this.expected.get(`${link.modId}:0`)].find((e) => e && Date.now() - e.at < EXPECT_TTL)
+    this.expected.delete(key)
+    this.expected.delete(`${link.modId}:0`)
+    return this.enqueue(link.modId, link.fileId, auth, undefined, hit?.tags)
+  }
+
+  /**
+   * Ohne Premium: Datei, deren nxm-Klick gleich von der Website kommt (aus einem Plan). fileId 0 = Hauptdatei.
+   * Gilt EXPECT_TTL lang; danach (oder nach forgetExpected) ist ein Klick wieder ein normaler Download mit Dialog.
+   */
+  expect(modId: number, fileId: number, tags: DownloadTags, plan?: string): void {
+    const now = Date.now()
+    for (const [k, e] of this.expected) if (now - e.at >= EXPECT_TTL) this.expected.delete(k)
+    this.expected.set(`${modId}:${fileId}`, { tags, plan, at: now })
+  }
+
+  forgetExpected(plan: string): void {
+    for (const [k, e] of this.expected) if (e.plan === plan) this.expected.delete(k)
   }
 
   /** Direkter Download aus der App (nur Premium), z. B. für ein Update. */
-  async downloadFile(modId: number, fileId: number, replaceRecord?: string): Promise<DownloadItem> {
+  async downloadFile(modId: number, fileId: number, replaceRecord?: string, tags?: DownloadTags): Promise<DownloadItem> {
     if (!this.user?.premium) throw new Error(t('main.nexus.premiumOnly'))
-    return this.enqueue(modId, fileId, undefined, replaceRecord)
+    return this.enqueue(modId, fileId, undefined, replaceRecord, tags)
+  }
+
+  /**
+   * Hauptdatei eines Mods laden (Premium), z. B. ein fehlendes Requirement. Mehrere verschiedene Hauptdateien:
+   * Fehler mit Hinweis, dann muss man auf Nexus selbst wählen.
+   */
+  async downloadMain(modId: number, tags?: DownloadTags): Promise<DownloadItem> {
+    if (!this.user?.premium) throw new Error(t('main.nexus.premiumOnly'))
+    const pick = pickMainFile(await this.client.files(modId))
+    if (!pick) throw new NexusError(t('main.nexus.noMainFile'), 409)
+    return this.enqueue(modId, pick.file_id, undefined, undefined, tags)
+  }
+
+  /** Cyberpunk-Mods, die das Konto empfohlen hat (10 min zwischengespeichert). Ohne Key: keine. */
+  async endorsedMods(force = false): Promise<number[]> {
+    if (!this.keys.key) return []
+    if (force || !this.endorsed || Date.now() - this.endorsed.at > ENDORSE_TTL) {
+      const list = await this.client.endorsements()
+      const ids = list.filter((e) => e.domain_name === NEXUS_GAME && e.status === 'Endorsed').map((e) => e.mod_id)
+      this.endorsed = { at: Date.now(), ids: new Set(ids) }
+    }
+    return [...this.endorsed.ids]
+  }
+
+  /** Empfehlen oder zurücknehmen; Nexus lehnt ab, wenn der Mod nicht über das Konto geladen wurde oder es zu früh ist. */
+  async endorse(modId: number, version: string, on: boolean): Promise<number[]> {
+    await this.client.endorse(modId, version || '1.0', on)
+    const ids = new Set(await this.endorsedMods().catch(() => [] as number[]))
+    if (on) ids.add(modId)
+    else ids.delete(modId)
+    this.endorsed = { at: Date.now(), ids }
+    return [...ids]
   }
 
   get updates(): Record<string, UpdateInfo> {
@@ -355,7 +447,11 @@ export class NexusService {
         try {
           const [mod, files] = await Promise.all([this.client.mod(nexusId), this.client.files(nexusId)])
           for (const r of recs) {
-            const u = computeUpdate({ version: r.version, fileId: r.source.nexusFileId }, mod.version, files)
+            const u = computeUpdate(
+              { version: r.version, fileId: r.source.nexusFileId, title: fileTitleOf(r), category: r.source.nexusCategory },
+              mod.version,
+              files,
+            )
             results[r.id] = { recordId: r.id, nexusModId: nexusId, installed: r.version, checkedAt: now, ...u }
           }
         } catch (err) {

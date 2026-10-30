@@ -7,7 +7,15 @@ import { tmpDir, writeTree } from './helpers'
 
 // Vollständigkeit (jeder Text auf Deutsch und Englisch) prüft schon tsc über area(). Hier der Rest.
 
-const PREFIX: Record<string, string> = { common: 'common.', main: 'main.', inventory: 'inv.', shell: 'shell.', net: 'net.', config: 'config.' }
+const PREFIX: Record<string, string> = {
+  common: 'common.',
+  main: 'main.',
+  inventory: 'inv.',
+  shell: 'shell.',
+  net: 'net.',
+  config: 'config.',
+  shards: 'shards.',
+}
 
 afterEach(() => setLang('de'))
 

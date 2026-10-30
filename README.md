@@ -18,6 +18,8 @@ it happens, and **PURGE → VANILLA** verifiably returns the game folder to its 
 | **Tabs (Q / E)** | **Color schemes** |
 | ![Switching tabs](docs/media/tabs.gif) | ![Color schemes](docs/media/themes.gif) |
 
+![SHARDS: a shared mod list with present, newer, older and missing entries](docs/media/shards.png)
+
 *Recorded with demo data: real framework names, made-up content mods.*
 
 ## Status
@@ -28,6 +30,7 @@ it happens, and **PURGE → VANILLA** verifiably returns the game folder to its 
 | 1 | Import → analysis → staging → hardlink deploy, journal, purge, launch | ✅ v0.1 |
 | 2 | Framework watcher: CET, RED4ext, redscript, ArchiveXL, TweakXL, Codeware from GitHub | open |
 | 3 | Nexus: API key, `nxm://` button, downloads, update check | ✅ v0.2 |
+| 3+ | Nexus requirements, collections, sharing (shards), auto-install, endorse | ✅ v0.4 |
 | 4 | Conflicts inside `.archive` files (RDAR scan), `modlist.txt` | open |
 | 5 | Profiles + savegame backups | open |
 | 6 | Diagnostics: logs after the game exits, crash bisect | open |
@@ -44,7 +47,8 @@ it happens, and **PURGE → VANILLA** verifiably returns the game folder to its 
 - Without a code-signing certificate, Windows SmartScreen shows a warning on first launch
   (“More info → Run anyway”).
 - Your own UI sounds for the installed version: `%APPDATA%\RIPPERDOC\sounds\sfx_<name>.wav`.
-- The Steam version of Cyberpunk 2077 is found automatically. Otherwise: SYS.CONFIG › “Choose game folder…”.
+- Cyberpunk 2077 from Steam, GOG or Epic is found automatically. Otherwise: SYS.CONFIG › “Choose game folder…”.
+- Double-clicking a `.rdshard` file (a shared mod list) opens it in RIPPERDOC (installed version).
 - UI in English and German: SYS.CONFIG › Look › Language (AUTO follows the Windows language).
 
 Build packages: `npm run dist` → `release/<version>/` (installer, zip, `win-unpacked/`). `npm run pack` only
@@ -58,7 +62,7 @@ npm install
 node node_modules\electron\install.js
 npm start          # builds and starts
 npm run dev        # with hot reload for the UI
-npm test           # tests (layout detection, deployer in a test game folder, first start, languages)
+npm test           # tests (layout detection, deployer in a test game folder, first start, languages, simulated Nexus)
 npm run typecheck
 npm run shortcut   # RIPPERDOC shortcut on desktop + Start menu (then double-click)
 ```
@@ -76,6 +80,9 @@ Requirements: Windows 10/11 and Node 22 or newer. For unpacking, RIPPERDOC uses 
   If an archive contains several equivalent folders (“Option A / Option B”), you pick a variant.
 - **Toggles:** take effect immediately (hardlinks take milliseconds). While the game is running, nothing is changed.
 - **Load order:** drag rows in INVENTORY. **Top wins** when two mods ship the same file.
+- **Several at once:** `Ctrl`+click picks single mods, `Shift`+click a range. The right column then enables,
+  disables or removes all of them in one go (one deploy instead of one per mod).
+- **Search:** by name, author or Nexus ID. The PROBLEMS filter also shows mods whose Nexus requirements are missing.
 - **Update:** import a new archive of the same mod (same name or same Nexus ID) → “Install update” keeps
   position and toggle.
 - **PURGE:** takes everything out of the game folder, puts backed-up game files back, resets the script cache and
@@ -98,6 +105,21 @@ Requirements: Windows 10/11 and Node 22 or newer. For unpacking, RIPPERDOC uses 
   chain, otherwise the mod version. With Premium, “Get update” downloads directly; without Premium, “Nexus”
   opens the file page. An update replaces the old mod in the same position; optional extra files of the same mod
   are not suggested as replacements automatically.
+- **Requirements:** the install dialog and the mod detail list what the mod's Nexus page names as requirements,
+  with ✓ / OFF / MISSING. Missing ones are pre-checked (not the ones the author marks as optional) and fetched
+  after installing: with Premium directly (they install without a dialog when there is nothing to decide),
+  otherwise RIPPERDOC opens their Nexus pages. Mods mixing several different main files make you pick on Nexus.
+- **Collections (SHARDS tab):** paste a collection link or short name, or click the collection's download button on
+  the website. RIPPERDOC lists every file with present / other version / missing, you pick what you want; Premium
+  downloads everything, without Premium RIPPERDOC opens the file pages in batches of five (Nexus requires one
+  click on the website per file). Clean archives install without a dialog and are deployed once at the end.
+  The collection's own install instructions (FOMOD choices, fixed load order) are not applied.
+- **Sharing (shards):** SHARDS › Share build turns your mod list into a code (`RDSHARD1:…`), a `.rdshard` file or a
+  Markdown list with Nexus links. It only holds references (mod, file, version, order, toggle), never files.
+  The receiver opens it like a collection and can then take over your load order and toggles.
+- **Endorse:** the mod detail has an “Endorse” button (Nexus only accepts it for mods downloaded with your account).
+- **Quick install:** SYS.CONFIG › Install: Nexus downloads skip the dialog when there is nothing to decide.
+  Also there: how much space the kept archives use and “Delete unused” for archives no installed mod needs.
 - **Nexus outage:** RIPPERDOC retries hanging or broken requests, resumes interrupted downloads where they stopped
   and keeps retrying in the background. NET then shows “NEXUS OUTAGE”, the next attempt and what Nexus' public
   status page reports (queried without a key). Installed mods, PURGE and LAUNCH don't need Nexus.

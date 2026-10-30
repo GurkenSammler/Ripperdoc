@@ -8,6 +8,7 @@ import type { NexusFiles } from './updates'
 // werden zweimal wiederholt, erst dann gibt es einen Fehler. Echte Antworten (401, 404, …) nie wiederholen.
 
 export const API = 'https://api.nexusmods.com/v1'
+export const GRAPHQL = 'https://api.nexusmods.com/v2/graphql'
 
 export class NexusError extends Error {
   constructor(
@@ -60,6 +61,7 @@ export interface ClientOptions {
 }
 
 const TIMEOUT = 20_000
+const QUICK_TIMEOUT = 8_000 // Abfragen, auf die jemand im Dialog wartet (Requirements, Shard-Infos)
 const RETRY_DELAYS = [1500, 5000]
 
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -85,11 +87,12 @@ export class NexusClient {
     private readonly o: ClientOptions = {},
   ) {}
 
-  private headers(): Record<string, string> {
+  /** anonymous: öffentliche Abfragen (GraphQL) gehen auch ohne Key; mit Key wird er trotzdem mitgeschickt. */
+  private headers(anonymous = false): Record<string, string> {
     const key = this.key()
-    if (!key) throw new NexusError(t('main.nexus.noKey'), 401)
+    if (!key && !anonymous) throw new NexusError(t('main.nexus.noKey'), 401)
     return {
-      apikey: key,
+      ...(key ? { apikey: key } : {}),
       accept: 'application/json',
       'Application-Name': BRAND.userAgent,
       'Application-Version': this.appVersion,
@@ -97,14 +100,37 @@ export class NexusClient {
     }
   }
 
-  private async get<T>(path: string): Promise<T> {
-    const headers = this.headers()
-    const delays = this.o.retryDelays ?? RETRY_DELAYS
+  private get<T>(path: string): Promise<T> {
+    return this.request<T>(API + path, { headers: this.headers() })
+  }
+
+  /**
+   * Abfrage an die GraphQL-API (v2): Requirements, Collections. Braucht keinen Key. Fehler in der Antwort
+   * (z. B. "Collection not found") kommen als echte Antwort, nicht als Störung. Kommen Daten UND Fehler
+   * (ein versteckter Mod in einer Liste), zählen die Daten. quick: kurzes Zeitlimit, keine Wiederholung.
+   */
+  async graphql<T>(query: string, variables?: Record<string, unknown>, quick = false): Promise<T> {
+    const headers = { ...this.headers(true), 'content-type': 'application/json' }
+    const body = JSON.stringify({ query, variables })
+    const res = await this.request<{ data?: T | null; errors?: { message?: string; extensions?: { code?: string } }[] }>(
+      GRAPHQL,
+      { method: 'POST', headers, body },
+      quick,
+    )
+    if (res.data) return res.data
+    const err = res.errors?.[0]
+    if (err?.extensions?.code === 'NOT_FOUND') throw new NexusError(t('main.nexus.notFound'), 404)
+    if (err) throw new NexusError(t('main.nexus.queryFailed', err.message ?? '?'), 400)
+    throw new NexusError(t('main.nexus.badData'), 502)
+  }
+
+  private async request<T>(url: string, init: { method?: string; headers: Record<string, string>; body?: string }, quick = false): Promise<T> {
+    const delays = quick ? [] : (this.o.retryDelays ?? RETRY_DELAYS)
     let last: NexusError | null = null
     for (let attempt = 0; attempt <= delays.length; attempt++) {
       if (attempt > 0) await (this.o.sleep ?? sleep)(delays[attempt - 1])
       try {
-        const data = await this.once<T>(path, headers)
+        const data = await this.once<T>(url, init, quick ? Math.min(QUICK_TIMEOUT, this.o.timeoutMs ?? QUICK_TIMEOUT) : undefined)
         this.o.onHealth?.(null)
         return data
       } catch (err) {
@@ -121,12 +147,12 @@ export class NexusClient {
     throw last!
   }
 
-  private async once<T>(path: string, headers: Record<string, string>): Promise<T> {
-    const timeout = this.o.timeoutMs ?? TIMEOUT
+  private async once<T>(url: string, init: { method?: string; headers: Record<string, string>; body?: string }, timeoutMs?: number): Promise<T> {
+    const timeout = timeoutMs ?? this.o.timeoutMs ?? TIMEOUT
     let res: Response
     let text: string
     try {
-      res = await (this.o.fetchImpl ?? fetch)(API + path, { headers, signal: AbortSignal.timeout(timeout) })
+      res = await (this.o.fetchImpl ?? fetch)(url, { ...init, signal: AbortSignal.timeout(timeout) })
       text = await res.text()
     } catch (err) {
       const e = err as Error
@@ -190,5 +216,19 @@ export class NexusClient {
   downloadLinks(modId: number, fileId: number, auth?: { key: string; expires: number }): Promise<DownloadLink[]> {
     const qs = auth ? `?key=${encodeURIComponent(auth.key)}&expires=${auth.expires}` : ''
     return this.get(`/games/${NEXUS_GAME}/mods/${modId}/files/${fileId}/download_link.json${qs}`)
+  }
+
+  /** Eigene Endorsements (alle Spiele); status "Endorsed" / "Abstained" / "Undecided". */
+  endorsements(): Promise<{ mod_id: number; domain_name: string; status: string }[]> {
+    return this.get('/user/endorsements.json')
+  }
+
+  /** Mod empfehlen (on) oder die Empfehlung zurücknehmen. Nexus verlangt die installierte Version. */
+  endorse(modId: number, version: string, on: boolean): Promise<{ status?: string; message?: string }> {
+    return this.request(`${API}/games/${NEXUS_GAME}/mods/${modId}/${on ? 'endorse' : 'abstain'}.json`, {
+      method: 'POST',
+      headers: { ...this.headers(), 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ version }).toString(),
+    })
   }
 }

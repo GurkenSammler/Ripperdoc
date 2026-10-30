@@ -1,12 +1,13 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } from 'electron'
 import { CORE_METHODS, type CoreApi, type CoreEvent } from '@shared/api'
 import { BRAND } from '@shared/brand'
 import { resolveLang, setLang, t } from '@shared/i18n'
 import { Core } from './core'
 import { modUrl, NEXUS_GAME } from './nexus/nxm'
 import type { ProtocolControl } from './nexus/service'
+import { SHARD_EXT } from './plans'
 import { UNINSTALL_ABORT, UNINSTALL_CONTINUE, uninstallCleanup, type UninstallChoice } from './uninstall'
 import { safeJoin } from './util/paths'
 
@@ -37,6 +38,8 @@ const protocol: ProtocolControl = {
 }
 
 const nxmIn = (argv: string[]): string | undefined => argv.find((a) => a.toLowerCase().startsWith('nxm://'))
+// Doppelklick auf eine .rdshard-Datei (Dateizuordnung aus dem Installer)
+const shardIn = (argv: string[]): string | undefined => argv.slice(1).find((a) => /\.rdshard$/i.test(a) && !a.startsWith('--'))
 
 // --nexus-offline: Nexus-Störung nachstellen (jede Anfrage an api.nexusmods.com scheitert), um die Anzeige zu prüfen
 const nexusFetch: typeof fetch | undefined =
@@ -150,8 +153,17 @@ const handlers: CoreApi = {
   journal: (limit) => core.journal.tail(limit),
   launch: () => core.launch(),
   openFolder: async (which, id) => {
+    // Nur Ordner bekannter Mods (shell.openPath würde auch eine Datei unter mods/ ausführen)
+    if (which === 'mod' && !core.mods.mods.has(id ?? '')) return
     const target =
-      which === 'game' ? core.game.root : which === 'data' ? core.dataRoot : safeJoin(path.join(core.dataRoot, 'mods'), id ?? '')
+      which === 'game'
+        ? core.game.root
+        : which === 'data'
+          ? core.dataRoot
+          : which === 'downloads'
+            ? core.mods.downloadsDir
+            : safeJoin(path.join(core.dataRoot, 'mods'), id ?? '')
+    if (which === 'downloads') await fs.mkdir(target, { recursive: true })
     if (target) await shell.openPath(target)
   },
   pickFiles: async () => {
@@ -184,6 +196,50 @@ const handlers: CoreApi = {
   openNexus: async (id) => {
     await shell.openExternal(id ? `${modUrl(Number(id))}?tab=files` : `https://www.nexusmods.com/${NEXUS_GAME}/mods/`)
   },
+  setEnabledMany: (ids, on) => core.setEnabledMany(ids, on),
+  removeMany: (ids) => core.removeMany(ids),
+  requirements: (id, refresh) => core.requirements(Number(id), !!refresh),
+  fetchRequirements: (list, parent) => core.fetchRequirements(list, parent),
+  loadCollection: (input) => core.loadCollection(input),
+  readShard: (text) => core.readShard(text),
+  readShardFile: (file) => core.readShardFile(file),
+  openShardFile: async () => {
+    const res = await dialog.showOpenDialog(win!, {
+      title: t('main.app.openShard'),
+      properties: ['openFile'],
+      filters: [
+        { name: 'Shard', extensions: [SHARD_EXT.slice(1), 'json', 'txt'] },
+        { name: t('main.app.filterAll'), extensions: ['*'] },
+      ],
+    })
+    return res.canceled || !res.filePaths[0] ? null : core.readShardFile(res.filePaths[0])
+  },
+  plan: async (id) => core.planView(id),
+  closePlan: async (id) => core.closePlan(id),
+  pendingPlans: async () => core.pendingPlans(),
+  planDownload: (id, keys, force) => core.planDownload(id, keys, !!force),
+  planApplyOrder: (id) => core.planApplyOrder(id),
+  shareExport: async (o) => core.shareExport(o),
+  shareSave: async (o) => {
+    const name = (o.title.trim() || 'ripperdoc').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 60)
+    const res = await dialog.showSaveDialog(win!, {
+      title: t('main.app.saveShard'),
+      defaultPath: path.join(app.getPath('documents'), `${name}${SHARD_EXT}`),
+      filters: [{ name: 'Shard', extensions: [SHARD_EXT.slice(1)] }],
+    })
+    if (res.canceled || !res.filePath) return null
+    await fs.writeFile(res.filePath, core.shareFile(o), 'utf8')
+    return res.filePath
+  },
+  copyText: async (text) => clipboard.writeText(String(text)),
+  // Nur Links ins Web (Nexus, Statusseite), nie Dateien oder andere Protokolle
+  openUrl: async (url) => {
+    if (/^https:\/\/[^\s]+$/i.test(url)) await shell.openExternal(url)
+  },
+  downloadsUsage: () => core.downloadsUsage(),
+  nexusEndorsed: (refresh) => core.nexus.endorsedMods(!!refresh),
+  nexusEndorse: (id, version, on) => core.nexus.endorse(Number(id), String(version), !!on),
+  cleanDownloads: () => core.cleanDownloads(),
 }
 
 for (const name of CORE_METHODS) {
@@ -325,8 +381,10 @@ if (arg('uninstall') !== undefined) {
       win.focus()
     }
     const url = nxmIn(argv)
+    const shard = shardIn(argv)
     // Link aus einer zweiten Instanz erst annehmen, wenn der Core fertig geladen ist
     if (url) void ready.then((ok) => (ok ? core.handleNxm(url) : undefined))
+    if (shard) void ready.then((ok) => (ok ? core.openShardPath(shard) : undefined))
   })
   let markReady: (ok: boolean) => void = () => undefined
   const ready = new Promise<boolean>((r) => (markReady = r))
@@ -354,6 +412,8 @@ if (arg('uninstall') !== undefined) {
     await createWindow()
     const url = nxmIn(process.argv)
     if (url) void core.handleNxm(url)
+    const shard = shardIn(process.argv)
+    if (shard) void core.openShardPath(shard)
     void core.backgroundNexus()
   })
   app.on('window-all-closed', () => {

@@ -2,17 +2,20 @@ import { withVersion } from '@shared/brand'
 import { useEffect, useMemo, useState } from 'react'
 import { frameworkById } from '@shared/frameworks'
 import { t } from '@shared/i18n'
-import type { ModRecord, UpdateInfo } from '@shared/types'
+import type { MissingNexus, ModRecord, UpdateInfo } from '@shared/types'
 import { play } from '../sfx'
 import { fmtBytes, fmtTime, MOD_DRAG, useCore } from '../state'
 import { Btn, Chip, Micro, Panel, SectionHeader, Switch, useGlitch } from '../ui/kit'
 import { TypeChips } from './parts'
+import { getRequirements, ReqList, ReqStatus, useRequirements } from './Requirements'
 
 type Filter = 'all' | 'active' | 'issues'
 
 export function Inventory() {
   const { inv, setInv, act, startImport, toast } = useCore()
   const [selected, setSelected] = useState<string | null>(inv.profile.order[0] ?? null)
+  // Mehrfachauswahl (Strg/Umschalt+Klick); selected bleibt der Anker
+  const [multi, setMulti] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [dragId, setDragId] = useState<string | null>(null)
@@ -33,18 +36,79 @@ export function Inventory() {
     for (const d of inv.missing) m.set(d.modId, [...(m.get(d.modId) ?? []), frameworkById(d.framework).short])
     return m
   }, [inv.missing])
+  const needsOf = useMemo(() => {
+    const m = new Map<string, MissingNexus[]>()
+    for (const d of inv.missingNexus) m.set(d.modId, [...(m.get(d.modId) ?? []), d])
+    return m
+  }, [inv.missingNexus])
 
   const ordered = inv.profile.order.map((id) => byId.get(id)).filter((m): m is ModRecord => !!m)
+  const q = search.trim().toLowerCase()
   const visible = ordered.filter((m) => {
-    if (search && !m.name.toLowerCase().includes(search.toLowerCase())) return false
+    // Suche: Name, Autor oder Nexus-ID
+    if (q && !m.name.toLowerCase().includes(q) && !(m.nexus?.author ?? '').toLowerCase().includes(q) && String(m.source.nexusModId ?? '') !== q) return false
     if (filter === 'active') return !!inv.profile.enabled[m.id]
-    if (filter === 'issues') return missingOf.has(m.id) || conflictsOf.loses.has(m.id) || !!inv.updates[m.id]?.hasUpdate
+    if (filter === 'issues') return missingOf.has(m.id) || needsOf.has(m.id) || conflictsOf.loses.has(m.id) || !!inv.updates[m.id]?.hasUpdate
     return true
   })
 
   useEffect(() => {
     if (selected && !byId.has(selected)) setSelected(inv.profile.order[0] ?? null)
+    setMulti((s) => {
+      const keep = [...s].filter((id) => byId.has(id))
+      return keep.length === s.size ? s : new Set(keep)
+    })
   }, [byId, selected, inv.profile.order])
+
+  /** Klick auf eine Zeile: allein wählen, Strg = dazu/weg, Umschalt = Bereich ab dem Anker (in der sichtbaren Liste). */
+  const choose = (id: string, e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => {
+    if (e.shiftKey && selected) {
+      const ids = visible.map((m) => m.id)
+      const a = ids.indexOf(selected)
+      const b = ids.indexOf(id)
+      if (a >= 0 && b >= 0) {
+        play('move')
+        setMulti(new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1)))
+        return
+      }
+    }
+    if (e.ctrlKey || e.metaKey) {
+      play('move')
+      const next = new Set(multi.size ? multi : selected ? [selected] : [])
+      if (next.has(id)) {
+        next.delete(id)
+        // Abgewählt: der aktuelle Mod soll einer der noch gewählten sein, nicht der gerade abgewählte
+        setSelected([...next].pop() ?? null)
+      } else {
+        next.add(id)
+        setSelected(id)
+      }
+      setMulti(next)
+      return
+    }
+    if (id !== selected || multi.size > 1) play('enter')
+    setSelected(id)
+    setMulti(new Set())
+  }
+  const bulk = multi.size > 1 ? ordered.filter((m) => multi.has(m.id)) : []
+
+  // Esc hebt die Mehrfachauswahl auf, Strg+A wählt alle sichtbaren (nicht in Eingabefeldern)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el?.tagName === 'TEXTAREA' || (el?.tagName === 'INPUT' && (el as HTMLInputElement).type !== 'checkbox')) return
+      if (e.key === 'Escape' && multi.size > 1) {
+        play('menu_close')
+        setMulti(new Set())
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && visible.length) {
+        e.preventDefault()
+        play('move')
+        setMulti(new Set(visible.map((m) => m.id)))
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   const toggle = async (m: ModRecord, on: boolean) => {
     const next = await act(() => window.rd.setEnabled(m.id, on))
@@ -65,7 +129,13 @@ export function Inventory() {
       <section className="inv__list">
         <SectionHeader index={1} title="Installed Implants" status={t('inv.list.status', active, ordered.length)} active />
         <div className="toolbar">
-          <input className="input toolbar__search" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} spellCheck={false} />
+          <input
+            className="input toolbar__search"
+            placeholder={t('inv.list.searchPh')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            spellCheck={false}
+          />
           <div className="seg">
             {(['all', 'active', 'issues'] as Filter[]).map((f) => (
               <button key={f} className={filter === f ? 'on' : ''} onClick={() => setFilter(f)} onMouseEnter={() => play('hover')}>
@@ -96,16 +166,14 @@ export function Inventory() {
                   mod={m}
                   index={index}
                   on={!!inv.profile.enabled[m.id]}
-                  selected={m.id === selected}
+                  selected={bulk.length ? multi.has(m.id) : m.id === selected}
                   wins={conflictsOf.wins.get(m.id) ?? 0}
                   loses={conflictsOf.loses.get(m.id) ?? 0}
                   missing={missingOf.get(m.id) ?? []}
+                  needs={needsOf.get(m.id) ?? []}
                   update={inv.updates[m.id]}
                   dropBefore={dropAt === index && dragId !== null && dragId !== m.id}
-                  onSelect={() => {
-                    if (m.id !== selected) play('enter')
-                    setSelected(m.id)
-                  }}
+                  onSelect={(e) => choose(m.id, e)}
                   onToggle={(on) => toggle(m, on)}
                   onDragStart={() => setDragId(m.id)}
                   onDragEnd={() => {
@@ -130,7 +198,9 @@ export function Inventory() {
       </section>
 
       <aside className="inv__detail">
-        {sel ? (
+        {bulk.length ? (
+          <BulkDetail mods={bulk} onClear={() => setMulti(new Set())} onSelectVisible={() => setMulti(new Set(visible.map((m) => m.id)))} />
+        ) : sel ? (
           <ModDetail
             key={sel.id}
             mod={sel}
@@ -155,9 +225,10 @@ function ModRow(props: {
   wins: number
   loses: number
   missing: string[]
+  needs: MissingNexus[]
   update?: UpdateInfo
   dropBefore: boolean
-  onSelect: () => void
+  onSelect: (e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => void
   onToggle: (on: boolean) => void
   onDragStart: () => void
   onDragEnd: () => void
@@ -170,7 +241,11 @@ function ModRow(props: {
     <div
       ref={g.ref}
       className={`row${props.on ? ' row--on' : ''}${props.selected ? ' row--sel' : ''}${props.dropBefore ? ' row--drop' : ''}`}
-      onClick={props.onSelect}
+      onClick={(e) => props.onSelect(e)}
+      onMouseDown={(e) => {
+        // Umschalt+Klick soll nicht nebenbei Text markieren
+        if (e.shiftKey) e.preventDefault()
+      }}
       onMouseEnter={() => {
         play('hover')
         g.trigger()
@@ -207,8 +282,17 @@ function ModRow(props: {
         </div>
         <div className="row__chips">
           <TypeChips types={m.types} />
-          {props.update?.hasUpdate && <Chip tone="warn">UPDATE {props.update.latest}</Chip>}
+          {props.update?.hasUpdate && (
+            <Chip tone="warn">{props.update.latestFileId ? `UPDATE ${props.update.latest}` : t('net.up.pickFile')}</Chip>
+          )}
           {props.missing.length > 0 && <Chip tone="warn">{t('inv.row.requires', props.missing.join(', '))}</Chip>}
+          {props.needs.length > 0 && (
+            <Chip tone="warn" title={`${t('inv.row.needsHint')}: ${props.needs.map((n) => n.name).join(', ')}`}>
+              {props.needs[0].off
+                ? t('inv.row.needsOff', props.needs[0].name.toUpperCase(), props.needs.length - 1)
+                : t('inv.row.needs', props.needs[0].name.toUpperCase(), props.needs.length - 1)}
+            </Chip>
+          )}
           {props.loses > 0 && (
             <Chip tone="alert" title={t('inv.row.overwrittenHint')}>
               {t('inv.row.overwritten', props.loses)}
@@ -237,6 +321,36 @@ function ModDetail(props: { mod: ModRecord; on: boolean; index: number; onToggle
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(m.name)
   const [armed, setArmed] = useState(false)
+  const reqs = useRequirements(m.source.nexusModId ?? null)
+  const missingReqs = (reqs.list ?? []).filter((r) => r.state === 'missing' && !r.optional)
+  const [fetching, setFetching] = useState(false)
+  const getMissing = async () => {
+    setFetching(true)
+    await getRequirements({ act, toast }, missingReqs, m.name)
+    setFetching(false)
+  }
+  // Endorsement (nur mit Key und Nexus-ID); Liste kommt gecacht aus dem Main-Prozess
+  const nexusId = m.source.nexusModId
+  const [endorsed, setEndorsed] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!nexus.hasKey || nexusId === undefined) return
+    let live = true
+    window.rd
+      .nexusEndorsed()
+      .then((ids) => live && setEndorsed(ids.includes(nexusId)))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [nexus.hasKey, nexusId])
+  const endorse = async () => {
+    if (nexusId === undefined) return
+    const on = !endorsed
+    const ids = await act(() => window.rd.nexusEndorse(nexusId, m.version, on))
+    if (!ids) return
+    setEndorsed(ids.includes(nexusId))
+    if (on) toast({ tone: 'ok', title: 'NEXUS', body: t('inv.detail.endorsedToast', m.name) })
+  }
 
   useEffect(() => {
     if (!armed) return
@@ -290,7 +404,7 @@ function ModDetail(props: { mod: ModRecord; on: boolean; index: number; onToggle
           <Chip tone={props.on ? 'ok' : undefined}>{props.on ? 'ACTIVE' : 'INACTIVE'}</Chip>
           <Chip>V {m.version}</Chip>
           <Chip>PRIO {String(props.index + 1).padStart(2, '0')}</Chip>
-          {update?.hasUpdate && <Chip tone="warn">UPDATE {update.latest}</Chip>}
+          {update?.hasUpdate && <Chip tone="warn">{update.latestFileId ? `UPDATE ${update.latest}` : t('net.up.pickFile')}</Chip>}
         </div>
         {m.nexus && (
           <div className="nx-card">
@@ -320,6 +434,24 @@ function ModDetail(props: { mod: ModRecord; on: boolean; index: number; onToggle
           )}
           <dt>{t('inv.detail.installed')}</dt>
           <dd>{fmtTime(m.installedAt)}</dd>
+          {m.origin && (
+            <>
+              <dt>{t('inv.detail.originLabel')}</dt>
+              <dd>
+                {m.origin.kind === 'collection'
+                  ? t('inv.detail.origin.collection', m.origin.title)
+                  : m.origin.kind === 'shard'
+                    ? t('inv.detail.origin.shard', m.origin.title)
+                    : t('inv.detail.origin.requirement', m.origin.title)}
+              </dd>
+            </>
+          )}
+          {update?.hasUpdate && !update.latestFileId && (
+            <>
+              <dt>Update</dt>
+              <dd className="special">{t('inv.detail.updateOnNexus')}</dd>
+            </>
+          )}
           <dt>{t('inv.mod.files')}</dt>
           <dd>
             {m.files.length} · {fmtBytes(total)}
@@ -372,7 +504,29 @@ function ModDetail(props: { mod: ModRecord; on: boolean; index: number; onToggle
           )}
         </dl>
 
-        <SectionHeader index={2} title={t('inv.mod.files')} status={`${m.files.length}`} />
+        {m.source.nexusModId !== undefined && (
+          <>
+            <SectionHeader
+              index={2}
+              title={t('inv.req.title')}
+              status={reqs.list ? `${reqs.list.filter((r) => r.state === 'ok').length}/${reqs.list.length} OK` : undefined}
+            />
+            <ReqStatus loading={reqs.loading} error={reqs.error} />
+            {reqs.list && <ReqList list={reqs.list} />}
+            <div className="config__buttons req__btns">
+              {missingReqs.length > 0 && (
+                <Btn size="small" variant="primary" onClick={getMissing} disabled={fetching}>
+                  {fetching ? t('net.btn.checking') : t('inv.req.getMissing', missingReqs.length)}
+                </Btn>
+              )}
+              <Btn size="small" onClick={reqs.reload} disabled={reqs.loading}>
+                {t('inv.req.refresh')}
+              </Btn>
+            </div>
+          </>
+        )}
+
+        <SectionHeader index={3} title={t('inv.mod.files')} status={`${m.files.length}`} />
         <ul className="filelist detail__files">
           {m.files.slice(0, 200).map((f) => (
             <li key={f.dst} title={`${f.dst} · ${fmtBytes(f.size)}`}>
@@ -383,7 +537,7 @@ function ModDetail(props: { mod: ModRecord; on: boolean; index: number; onToggle
         </ul>
         {m.skipped.length > 0 && (
           <>
-            <SectionHeader index={3} title={t('inv.detail.skipped')} status={`${m.skipped.length}`} />
+            <SectionHeader index={4} title={t('inv.detail.skipped')} status={`${m.skipped.length}`} />
             <ul className="filelist filelist--short dim">
               {m.skipped.slice(0, 12).map((s) => (
                 <li key={s}>{s}</li>
@@ -396,9 +550,19 @@ function ModDetail(props: { mod: ModRecord; on: boolean; index: number; onToggle
       <div className="detail__foot">
         <Switch on={props.on} onChange={props.onToggle} />
         <span className="detail__spacer" />
-        {update?.hasUpdate && nexus.user?.premium && (
+        {update?.hasUpdate && !!update.latestFileId && nexus.user?.premium && (
           <Btn size="small" variant="primary" onClick={fetchUpdate}>
             {t('inv.detail.getUpdate')}
+          </Btn>
+        )}
+        {nexusId !== undefined && endorsed !== null && (
+          <Btn
+            size="small"
+            variant={endorsed ? undefined : 'primary'}
+            onClick={endorse}
+            title={endorsed ? t('inv.detail.unendorseHint') : t('inv.detail.endorseHint')}
+          >
+            {endorsed ? t('inv.detail.endorsed') : t('inv.detail.endorse')}
           </Btn>
         )}
         {m.source.nexusModId !== undefined && (
@@ -414,6 +578,77 @@ function ModDetail(props: { mod: ModRecord; on: boolean; index: number; onToggle
         </Btn>
         <Btn size="small" variant="danger" onClick={remove} sfx={armed ? 'press' : 'menu_open'}>
           {armed ? t('inv.detail.removeSure') : t('inv.detail.remove')}
+        </Btn>
+      </div>
+    </Panel>
+  )
+}
+
+/** Rechte Spalte bei Mehrfachauswahl: alle auf einmal an, aus oder entfernen (ein Einspielen statt vieler). */
+function BulkDetail(props: { mods: ModRecord[]; onClear: () => void; onSelectVisible: () => void }) {
+  const { inv, setInv, act, toast } = useCore()
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (!armed) return
+    const timer = setTimeout(() => setArmed(false), 3500)
+    return () => clearTimeout(timer)
+  }, [armed])
+  const ids = props.mods.map((m) => m.id)
+  const on = props.mods.filter((m) => inv.profile.enabled[m.id]).length
+  const files = props.mods.reduce((n, m) => n + m.files.length, 0)
+  const bytes = props.mods.reduce((n, m) => n + m.files.reduce((s, f) => s + f.size, 0), 0)
+
+  const set = async (enable: boolean) => {
+    const next = await act(() => window.rd.setEnabledMany(ids, enable))
+    if (next) setInv(next)
+  }
+  const remove = async () => {
+    if (!armed) return setArmed(true)
+    const next = await act(() => window.rd.removeMany(ids))
+    if (!next) return
+    setInv(next)
+    props.onClear()
+    toast({ tone: 'ok', title: t('inv.list.removed'), body: t('inv.bulk.removed', ids.length) })
+  }
+
+  return (
+    <Panel className="detail" tone="deep" cut={18}>
+      <div className="detail__head">
+        <Micro accent>MULTI-SELECT</Micro>
+        <div className="detail__name">{t('inv.bulk.title', props.mods.length)}</div>
+        <div className="detail__chips">
+          <Chip tone={on ? 'ok' : undefined}>
+            {on}/{props.mods.length} ACTIVE
+          </Chip>
+          <Chip>{t('inv.bulk.size', files, fmtBytes(bytes))}</Chip>
+        </div>
+        <p className="dim bulk__hint">{t('inv.bulk.hint')}</p>
+      </div>
+      <div className="detail__body">
+        <ul className="filelist bulk__list">
+          {props.mods.map((m) => (
+            <li key={m.id} className={inv.profile.enabled[m.id] ? '' : 'dim'}>
+              {m.name} <span className="dim">V {m.version}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="detail__foot detail__foot--wrap">
+        <Btn size="small" variant="primary" onClick={() => set(true)} disabled={on === props.mods.length}>
+          {t('inv.bulk.enable')}
+        </Btn>
+        <Btn size="small" onClick={() => set(false)} disabled={on === 0}>
+          {t('inv.bulk.disable')}
+        </Btn>
+        <Btn size="small" variant="danger" onClick={remove} sfx={armed ? 'press' : 'menu_open'}>
+          {armed ? t('inv.bulk.removeSure', props.mods.length) : t('inv.bulk.remove')}
+        </Btn>
+        <span className="detail__break" />
+        <Btn size="small" onClick={props.onSelectVisible}>
+          {t('inv.bulk.allVisible')}
+        </Btn>
+        <Btn size="small" onClick={props.onClear} sfx="menu_close">
+          {t('inv.bulk.clear')}
         </Btn>
       </div>
     </Panel>

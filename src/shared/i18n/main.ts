@@ -10,6 +10,8 @@ export const main = area({
     'main.app.pickArchives': 'Mod-Archive wählen',
     'main.app.filterArchives': 'Mod-Archive',
     'main.app.filterAll': 'Alle Dateien',
+    'main.app.openShard': 'Shard öffnen',
+    'main.app.saveShard': 'Shard speichern',
 
     // Deinstallation (RIPPERDOC.exe --uninstall, vom Deinstaller aufgerufen)
     'main.uninstall.title': 'RIPPERDOC deinstallieren',
@@ -32,6 +34,24 @@ export const main = area({
     'main.busy.order': 'REIHENFOLGE',
     'main.busy.remove': 'ENTFERNEN',
     'main.busy.gameFolder': 'SPIELORDNER',
+    'main.busy.deploy': 'EINSPIELEN',
+    'main.busy.clean': 'AUFRÄUMEN',
+
+    // Ohne Dialog installiert (Collections, Requirements, Schnell-Installieren)
+    'main.auto.title': 'AUTO-INSTALL',
+    'main.auto.installed': (n: number, names: string) => `${n === 1 ? '1 Mod installiert' : `${n} Mods installiert`}: ${names}`,
+    'main.auto.deployLater': (n: number, reason: string) =>
+      `${n === 1 ? '1 Mod ist' : `${n} Mods sind`} installiert und aktiv, aber noch nicht eingespielt (${reason}). Das holt der nächste Schalter oder LAUNCH nach.`,
+
+    // Collections und Shards
+    'main.plan.badCollection': 'Das ist kein Collection-Link. Erwartet: Link von nexusmods.com/…/collections/… oder der Kurzname (z. B. iszwwe).',
+    'main.plan.gone': 'Diese Liste ist nicht mehr geladen. Bitte noch einmal öffnen.',
+    'main.shard.unreadable': 'Kein gültiger Shard (Code beginnt mit RDSHARD1: oder .rdshard-Datei).',
+    'main.shard.tooBig': (max: number) => `Shard zu groß (höchstens ${max} Einträge).`,
+    'main.shard.textHead': (title: string, patch: string | null, n: number) =>
+      `**${title}** · Cyberpunk 2077${patch ? ` ${patch}` : ''} · ${n === 1 ? '1 Mod' : `${n} Mods`} (RIPPERDOC-Shard)`,
+    'main.shard.textOff': '(aus)',
+    'main.shard.textLocal': 'Nicht auf Nexus:',
 
     // Spiel finden, starten, Spielordner wechseln
     'main.game.notFound': 'Spiel nicht gefunden',
@@ -50,6 +70,7 @@ export const main = area({
     'main.import.unpackFailed': (reason: string) => `Entpacken fehlgeschlagen: ${reason}`,
     'main.import.expired': 'Import ist abgelaufen, bitte neu starten',
     'main.import.chooseVariant': 'Bitte zuerst eine Variante wählen',
+    'main.import.replaceChanged': 'Der Mod zum Ersetzen hat sich inzwischen geändert. Import abbrechen und neu starten.',
     'main.import.nothingToInstall': 'Nichts zu installieren: keine Datei passt in den Spielordner',
     'main.import.ruleShellRemoved': 'game-root (Hülle entfernt)',
     'main.import.ruleVariant': (rule: string, variant: string) => `${rule} · Variante ${variant}`,
@@ -79,6 +100,7 @@ export const main = area({
     'main.journal.changedOutside': 'von außen geändert',
     'main.journal.foreignFile': 'fremde Datei auf belegtem Platz',
     'main.journal.runtime': 'zur Laufzeit erzeugt',
+    'main.journal.shardOrder': (title: string) => `Reihenfolge aus Shard „${title}“`,
 
     // Nexus: Key, Anfragen, Links
     'main.nexus.noKey': 'Kein Nexus-Key hinterlegt (NET › Uplink).',
@@ -111,6 +133,8 @@ export const main = area({
     'main.nexus.fileGone': (fileId: number, modId: number) => `Datei ${fileId} gibt es bei Mod ${modId} nicht (mehr).`,
     'main.nexus.statusUnknown': 'Unbekannt',
     'main.nexus.statusPageHttp': (status: number) => `Statusseite: HTTP ${status}`,
+    'main.nexus.queryFailed': (detail: string) => `Nexus-Abfrage abgelehnt: ${detail}`,
+    'main.nexus.noMainFile': 'Der Mod hat mehrere Hauptdateien. Auf Nexus die passende wählen.',
 
     // Downloads
     'main.download.queued': (name: string) => `${name} eingereiht.`,
@@ -132,6 +156,8 @@ export const main = area({
     'main.app.pickArchives': 'Choose mod archives',
     'main.app.filterArchives': 'Mod archives',
     'main.app.filterAll': 'All files',
+    'main.app.openShard': 'Open shard',
+    'main.app.saveShard': 'Save shard',
 
     'main.uninstall.title': 'Uninstall RIPPERDOC',
     'main.uninstall.message': (n: number) => `${n === 1 ? '1 RIPPERDOC file is' : `${n} RIPPERDOC files are`} still in the game folder.`,
@@ -152,6 +178,22 @@ export const main = area({
     'main.busy.order': 'LOAD ORDER',
     'main.busy.remove': 'REMOVING',
     'main.busy.gameFolder': 'GAME FOLDER',
+    'main.busy.deploy': 'DEPLOYING',
+    'main.busy.clean': 'CLEANING UP',
+
+    'main.auto.title': 'AUTO-INSTALL',
+    'main.auto.installed': (n: number, names: string) => `${n === 1 ? '1 mod installed' : `${n} mods installed`}: ${names}`,
+    'main.auto.deployLater': (n: number, reason: string) =>
+      `${n === 1 ? '1 mod is' : `${n} mods are`} installed and enabled but not deployed yet (${reason}). The next toggle or LAUNCH catches up.`,
+
+    'main.plan.badCollection': 'That is not a collection link. Expected: a link from nexusmods.com/…/collections/… or the short name (e.g. iszwwe).',
+    'main.plan.gone': 'This list is no longer loaded. Please open it again.',
+    'main.shard.unreadable': 'Not a valid shard (code starting with RDSHARD1: or a .rdshard file).',
+    'main.shard.tooBig': (max: number) => `Shard too large (at most ${max} entries).`,
+    'main.shard.textHead': (title: string, patch: string | null, n: number) =>
+      `**${title}** · Cyberpunk 2077${patch ? ` ${patch}` : ''} · ${n === 1 ? '1 mod' : `${n} mods`} (RIPPERDOC shard)`,
+    'main.shard.textOff': '(off)',
+    'main.shard.textLocal': 'Not on Nexus:',
 
     'main.game.notFound': 'Game not found',
     'main.game.cyberpunkNotFound': 'Cyberpunk 2077 not found.',
@@ -167,6 +209,7 @@ export const main = area({
     'main.import.unpackFailed': (reason: string) => `Unpacking failed: ${reason}`,
     'main.import.expired': 'Import expired, please start again',
     'main.import.chooseVariant': 'Please choose a variant first',
+    'main.import.replaceChanged': 'The mod to replace has changed in the meantime. Cancel the import and start it again.',
     'main.import.nothingToInstall': 'Nothing to install: no file fits into the game folder',
     'main.import.ruleShellRemoved': 'game-root (wrapper folder removed)',
     'main.import.ruleVariant': (rule: string, variant: string) => `${rule} · variant ${variant}`,
@@ -194,6 +237,7 @@ export const main = area({
     'main.journal.changedOutside': 'changed externally',
     'main.journal.foreignFile': 'foreign file on a taken path',
     'main.journal.runtime': 'created at runtime',
+    'main.journal.shardOrder': (title: string) => `load order from shard “${title}”`,
 
     'main.nexus.noKey': 'No Nexus API key set (NET › Uplink).',
     'main.nexus.notAKey': 'That does not look like a Nexus API key.',
@@ -224,6 +268,8 @@ export const main = area({
     'main.nexus.fileGone': (fileId: number, modId: number) => `Mod ${modId} has no file ${fileId} (anymore).`,
     'main.nexus.statusUnknown': 'Unknown',
     'main.nexus.statusPageHttp': (status: number) => `Status page: HTTP ${status}`,
+    'main.nexus.queryFailed': (detail: string) => `Nexus query rejected: ${detail}`,
+    'main.nexus.noMainFile': 'This mod has several main files. Pick the right one on Nexus.',
 
     'main.download.queued': (name: string) => `${name} queued.`,
     'main.download.gone': 'This download no longer exists.',

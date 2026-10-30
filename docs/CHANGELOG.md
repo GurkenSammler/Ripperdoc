@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.4.0 – 2026-10-30
+- **Nexus requirements:** the install dialog and the mod detail show what the mod's Nexus page lists as
+  requirements (via Nexus' GraphQL API, works without a key), with present / off / missing and the author's notes.
+  Missing, non-optional ones are pre-checked and fetched after installing: Premium downloads the main file
+  directly and installs it without a dialog when clear; without Premium, RIPPERDOC opens the Nexus pages and the
+  “Mod Manager Download” click from there is handled the same way. INVENTORY shows a “NEEDS …” chip and the
+  PROBLEMS filter includes these mods. Cached for 24 h in `<data>/nexus-requirements.json`.
+- **Nexus collections:** new SHARDS tab. Paste a collection link, `nxm://…/collections/…` (the website's
+  collection button) or the short name → list of all files with present / newer / older-or-same / missing /
+  unavailable, optional and 18+ markers, sizes, search and state filters with counts, selection that survives
+  switching tabs. Premium: download everything selected. Without Premium: open the file pages in batches of 5
+  (one click on “Slow download” per file is Nexus' rule) with an “opened N/M” counter. **No silent downgrades:**
+  an entry only counts as an update when its version is really newer than yours; older or equal ones are never
+  pre-selected and, if you pick them anyway, install with the dialog. Collection installer instructions (FOMOD
+  choices, rules) are not applied yet.
+- **Mod sharing (shards):** share your mod list as a code (`RDSHARD1:` + deflate + base64url), a `.rdshard` file
+  or a Markdown list with Nexus links. Only references, never files. Opening a shard (paste, file dialog, drop
+  onto the window or double-click on a `.rdshard` with the installed version) shows it like a collection;
+  “Apply load order” (with confirmation) takes over the sender's order and toggles.
+- **Endorse** button in the mod detail (Nexus API; only works for mods downloaded with your account).
+- **Auto-install:** downloads from collections, shards and requirements (and all Nexus downloads with the new
+  SYS.CONFIG › Install › Quick install) skip the dialog when there is nothing to decide (one variant, nothing
+  unknown or blocked, replacement certain). They are deployed together once no auto download is running anymore
+  (at most every 60 s), with one message for all. If the game is running, they stay collected (one warning) and are
+  deployed on the next attempt; a replaced mod's files are only deleted after that deploy.
+- **Multi-select in INVENTORY:** Ctrl+click / Shift+click / Ctrl+A, Esc clears; then enable, disable or remove all
+  in one deploy. Search also matches author and Nexus ID. A requirement that is installed but off shows “X OFF”
+  with an “Enable” button.
+- NET: “Cancel N queued” for long download lists; outdated files without a clear successor show “PICK FILE”.
+- **Archive cleanup:** SYS.CONFIG › Install shows how much space the kept archives use and deletes the ones no
+  installed mod needs anymore.
+- **Fix: update check for multi-file mods** (e.g. Garage: core + service parts under one mod ID). A file that is
+  still current on Nexus is no longer reported as outdated just because the mod version rose; an outdated file
+  without an update chain follows the successor with the same file title, otherwise it shows “UPDATE ?” with a
+  Nexus button instead of offering the wrong file. File titles ignore version numbers in them (“CET 1.38.0 …”).
+- **Fix: replacing the right file:** downloading another file of the same mod no longer offers to replace a
+  different part; local re-imports of Nexus-named archives match the record with the same file title, and with
+  several files of one mod and no match nothing is suggested. New records remember their Nexus file title.
+- **Robustness (review with several agents):** GraphQL answers that carry data and an error (one hidden mod in a
+  batch) keep the data; lookups someone waits for use a short timeout instead of retries; no stuck outage banner
+  without a key; nxm clicks expected from a plan expire after 30 min or when the plan is closed; the import
+  refuses if the mod to replace changed meanwhile; archives being imported are safe from “Delete unused”;
+  requirement lookups after a collection are bundled; “NOT optional” notes count as required; IPC only opens
+  folders of known mods and reads shard files from local drives only.
+- Collection cover images (media.nexusmods.com) allowed in the CSP. 33 new tests, 127 in total.
+
 ## 0.3.0 – 2026-10-26
 - **Installer + portable version** (electron-builder 26.17.0): `RIPPERDOC-Setup-0.3.0.exe` (no admin rights,
   desktop + Start menu, entry under “Apps”) and `RIPPERDOC-0.3.0-portable.zip`. On uninstall, RIPPERDOC itself

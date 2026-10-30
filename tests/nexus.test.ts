@@ -58,7 +58,8 @@ describe('Versionen und Updates', () => {
   it('folgt der Update-Kette', () => {
     expect(computeUpdate({ version: '1.0', fileId: 1 }, '2.0', files)).toEqual({ hasUpdate: true, latest: '2.0', latestFileId: 2, latestFileName: 'a-2.zip' })
     expect(computeUpdate({ version: '2.0', fileId: 2 }, '2.0', files).hasUpdate).toBe(false)
-    expect(computeUpdate({ version: '1.0', fileId: 3 }, '2.0', files).hasUpdate).toBe(true)
+    // Optionale Datei, selbst noch aktuell: die neue Mod-Version betrifft eine andere Datei, kein Update
+    expect(computeUpdate({ version: '1.0', fileId: 3 }, '2.0', files).hasUpdate).toBe(false)
   })
   it('ohne Datei-ID zählt die Mod-Version', () => {
     expect(computeUpdate({ version: '1.0' }, '2.0', files)).toMatchObject({ hasUpdate: true, latestFileId: 2 })
@@ -200,10 +201,10 @@ describe('Nexus-Durchlauf (API simuliert)', () => {
     expect(ups[out1.mod.id]).toMatchObject({ hasUpdate: true, latest: '2.0', latestFileId: 2 })
     expect((await core.inventory()).updates[out1.mod.id].hasUpdate).toBe(true)
 
-    // Optionales Addon desselben Mods: Ersetzen wird angeboten, aber nicht vorbelegt
+    // Optionales Addon desselben Mods (anderer Dateititel): eigene Datei, nichts zum Ersetzen angeboten
     await core.nexus.downloadFile(100, 3)
     const p3 = await nextImport()
-    expect(p3.replaces).toBe(out1.mod.id)
+    expect(p3.replaces).toBeNull()
     expect(p3.replaceDefault).toBe(false)
     const out3 = await core.commitImport({ token: p3.token, unknown: 'skip', replace: false })
     if (!out3.ok) throw new Error(out3.error)
